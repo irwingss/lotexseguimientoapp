@@ -18,8 +18,6 @@ meta:
     - root_spec: specs_app.yaml  # INMUTABLE: no modificar (single source of truth en la raíz del repo)
 
 principios:
-  - "Puedes construir las tablas en Supabase usando el MCP que ya está conectado a tu disposición como herramienta."
-  - "Para el desarrollo frontend, cuando vayas a usar shadcn usa el MCP que ya está conectado si se requiere."
   - "Construir de atrás hacia adelante: esquema + RLS + RPC antes del UI."
   - "Cada historia tiene DoD (Definition of Done) con pruebas y verificación RLS."
   - "Nada a producción sin revisiones (PR + checklist + previsualización Vercel)."
@@ -74,7 +72,27 @@ documentacion:
     7_detalle_expediente:
       - 06-Frontend-UI.md (tabs, filtros, mapa, export)
     8_avance_monitoreo:
-      - 04-API-RPC.md (mutaciones avance, reglas replanteo/añadido)
+      - 04-API-RPC.md (mutaciones avance, reglas replanteo/añadido; RPCs rpc_crear_replanteo y rpc_crear_anadido)
+      - 06-Frontend-UI.md (formularios de replanteo/añadido)
+    8b_acciones_por_locacion:
+      - 04-API-RPC.md (rpc_bulk_update_locacion_marcado/monitoreo; parámetros dry_run/only_unset)
+      - 06-Frontend-UI.md (modal de confirmación y badges de completitud)
+    9_vuelos_avance:
+      - 04-API-RPC.md (mutaciones marcado/volado)
+    10_planificar:
+      - 04-API-RPC.md (planificación diaria, asignaciones)
+    11_dashboard:
+      - 02-DB-Schema.md (vistas SQL con flags de completitud)
+      - 06-Frontend-UI.md (widgets KPI)
+    12_exportaciones:
+      - 05-Edge-Functions.md (export XLSX)
+    13_seguridad_y_auditoria:
+      - 03-RLS-Matrix.md (verificación)
+      - 09-Runbook-Incidentes.md (casuística)
+    14_UAT:
+      - 10-UAT-Checklist.md (casos y resultados)
+    15_lanzamiento:
+      - 08-Deployment.md (dominio, backups, monitoreo)
     9_vuelos_avance:
       - 04-API-RPC.md (mutaciones marcado/volado)
     10_planificar:
@@ -213,18 +231,31 @@ fases:
       - "Lista y filtros eficientes"
 
   - nombre: 8_avance_monitoreo
-    objetivo: "Actualizar estados + replanteo/añadido"
+    objetivo: "Actualizar estados + replanteo/añadido (TODOS los roles)"
     pasos:
       - "UI de marcado/monitoreado con estados PENDIENTE/HECHO/DESCARTADO"
       - "Motivo obligatorio si DESCARTADO"
-      - "Replanteo: formulario crea nuevo punto (tipo_origen=REPLANTEO) y descarta el original"
-      - "Añadido: formulario crea nuevo punto (tipo_origen=ANADIDO)"
+      - "Replanteo: formulario crea nuevo punto (tipo_origen=REPLANTEO) y descarta el original; usar RPC transaccional rpc_crear_replanteo"
+      - "Añadido: formulario crea nuevo punto (tipo_origen=ANADIDO); usar rpc_crear_anadido"
       - "Captura coords del dispositivo (opcional)"
       - "Autoasignar monitoreado_accion_id por fecha si no viene"
       - "Cola offline para estas mutaciones"
     DoD:
       - "Triggers actualizan estatus"
-      - "RLS permite solo columnas de avance"
+      - "RLS permite INSERT de REPLANTEO/ANADIDO a SUPERVISOR/MONITOR/LIDER en expedientes asignados; ADMIN todo"
+      - "rpc_crear_replanteo y rpc_crear_anadido con pruebas (éxito/errores)"
+
+  - nombre: 8b_acciones_por_locacion
+    objetivo: "Acciones masivas por LOCACIÓN (marcar/monitorear en bloque)"
+    pasos:
+      - "Implementar RPCs: rpc_bulk_update_locacion_marcado, rpc_bulk_update_locacion_monitoreo"
+      - "Front: botones 'Marcar locación' y 'Monitorear locación' + modal de confirmación con vista previa (dry_run)"
+      - "Parámetros: only_unset (no pisar HECHO), motivo si DESCARTADO, accion_id opcional para monitoreo"
+      - "Actualizar badges de 'Completa' leyendo v_resumen_por_locacion"
+    DoD:
+      - "RPCs devuelven conteos coherentes en dry_run y aplican cambios reales"
+      - "RLS: solo afecta expedientes donde el usuario está asignado (no-ADMIN)"
+      - "E2E: cerrar locación en bloque y luego replantear/añadir un punto funciona sin fricción"
 
   - nombre: 9_vuelos_avance
     objetivo: "Actualizar marcado/volado"
@@ -247,10 +278,11 @@ fases:
   - nombre: 11_dashboard
     objetivo: "% completitud global y por frente/locación"
     pasos:
-      - "Crear vistas SQL v_resumen_expediente, v_resumen_por_locacion, v_resumen_planificacion"
-      - "Widgets: tarjetas KPI + tablas + barras"
+      - "Crear vistas SQL v_resumen_expediente, v_resumen_por_locacion (con flags marcado_completo/monitoreado_completo), v_resumen_planificacion"
+      - "Widgets: tarjetas KPI + tablas + barras; badges 'Completa' por locación"
     DoD:
       - "KPIs correctos en dataset de prueba"
+      - "Flags de completitud por locación reflejan replanteos/añadidos posteriores a acciones masivas"
 
   - nombre: 12_exportaciones
     objetivo: "Descargas filtradas por expediente"
@@ -305,7 +337,7 @@ pruebas:
   tipos:
     - "unitarias (utilidades, hooks)"
     - "integración ligera (acción → RPC → BD)"
-    - "e2e crítico (login, precarga, avance, export)"
+    - "e2e crítico (login, precarga, avance, export, bulk-locación + replanteo posterior)""
   navegadores:
     - chrome_android
     - safari_ios
@@ -319,10 +351,13 @@ rendimiento:
   medidas:
     - "code-splitting, lazy para mapa"
 
-riesgos:
-  - "Conectividad intermitente: mitigar con precarga clara y cola de mutaciones"
-  - "Errores de Excel: validar columnas estrictamente, feedback por fila"
-  - "Conflictos de edición: resolver con last-write-wins y auditoría"
+métricas_exito:
+  - "% de sesiones móviles con PWA instalada"
+  - "Tiempo medio de precarga"
+  - "% de sincronizaciones exitosas al primer intento"
+  - "% locaciones completas vs planificado"
+  - "Tiempo medio para completar una locación (antes/después de acciones masivas)"
+  - "% de acciones masivas ejecutadas con dry_run previo""
 
 runbooks:
   incidentes:

@@ -348,7 +348,7 @@ rls_policies:
       select:
         - "Permitido a usuarios con permisos_sistema=ADMIN (ver todos, incluidos is_deleted=true)."
         - "Permitido al propio usuario para su fila (email del JWT = email) siempre que is_deleted=false."
-      insert_update_delete: ["Solo usuarios con permisos_sistema=ADMIN (borrado lógico via RPC)."]IN (borrado lógico via RPC)."]
+      insert_update_delete: ["Solo usuarios con permisos_sistema=ADMIN (borrado lógico via RPC)."]
     expedientes:
       select: ["Permitido si el usuario está asignado en expediente_supervisores o tiene permisos_sistema=ADMIN; para no-ADMIN is_deleted=false."]
       insert_update_delete: ["Solo usuarios con permisos_sistema=ADMIN (borrado lógico via RPC)."]
@@ -362,7 +362,10 @@ rls_policies:
       select: ["Permitido si pertenece a expedientes donde el usuario esté asignado o el usuario tiene permisos_sistema=ADMIN o rol=SUPERVISOR_LIDER; para no-ADMIN is_deleted=false."]
       update:
         - "SUPERVISOR, SUPERVISOR_LIDER, MONITOR pueden actualizar solo columnas de avance (marcado_*, monitoreado_*, tipo_origen, parent_punto_id cuando crean replanteo/añadido); no pueden cambiar is_deleted."
-      insert_delete: ["Solo usuarios con permisos_sistema=ADMIN (vía importación) o SUPERVISOR_LIDER para replanteos/añadidos; borrado lógico vía RPC solo permisos_sistema=ADMIN."]
+      insert:
+        - "SUPERVISOR, SUPERVISOR_LIDER, MONITOR pueden INSERTAR filas con tipo_origen IN ('REPLANTEO','ANADIDO') en expedientes donde estén asignados; REPLANTEO requiere parent_punto_id del mismo expediente."
+        - "Usuarios con permisos_sistema=ADMIN pueden insertar cualquier fila (incluida importación masiva)."
+      delete: ["Borrado lógico vía RPC solo usuarios con permisos_sistema=ADMIN."]
     vuelos_items:
       select: ["Mismo criterio que monitoreo_puntos; para no-ADMIN is_deleted=false."]
       update:
@@ -480,6 +483,18 @@ sql_funcs_y_triggers:
   - nombre: rpc_restore_plan_asignacion(id uuid)
     lenguaje: sql
     proposito: "Restore de asignaciones (solo ADMIN)."
+  - nombre: rpc_crear_replanteo(original_id uuid, payload jsonb)
+    lenguaje: plpgsql
+    proposito: "Transacción atómica: DESCARTA original (motivo requerido en payload.motivo_descartado) + INSERT nuevo punto con tipo_origen=REPLANTEO, parent_punto_id y sufijo 'R' en cod_punto_campo/cod_colectora; valida que ambos pertenezcan al mismo expediente; auto-set geom; audita y retorna {original, nuevo}. Disponible para SUPERVISOR/MONITOR/SUPERVISOR_LIDER/ADMIN asignados al expediente."
+  - nombre: rpc_crear_anadido(expediente_id uuid, payload jsonb)
+    lenguaje: plpgsql
+    proposito: "INSERT validado de punto ANADIDO (campos: locacion, cod_celda, cod_grilla, este, norte, prof, p_superpos, cod_punto_campo, cod_colectora, distancia). Verifica unicidad por expediente, set geom y audita. Disponible para SUPERVISOR/MONITOR/SUPERVISOR_LIDER/ADMIN asignados al expediente."
+  - nombre: rpc_bulk_update_locacion_marcado(expediente_id uuid, locacion text, status status_trabajo, motivo text default null, only_unset boolean default true, dry_run boolean default false)
+    lenguaje: plpgsql
+    proposito: "Actualiza en bloque marcado_status de TODOS los puntos de una LOCACION en el expediente. Guardrails: si status=DESCARTADO => motivo obligatorio; if only_unset=true, solo PENDIENTE; si dry_run=true, no aplica cambios y devuelve conteos {total, afectados}. Audita operación."
+  - nombre: rpc_bulk_update_locacion_monitoreo(expediente_id uuid, locacion text, status status_trabajo, accion_id uuid default null, motivo text default null, only_unset boolean default true, dry_run boolean default false)
+    lenguaje: plpgsql
+    proposito: "Actualiza en bloque monitoreado_status de TODOS los puntos de una LOCACION en el expediente. Si status=HECHO y accion_id es null, autoasigna por fecha (f_default_accion_por_fecha); si status=DESCARTADO requiere motivo. Soporta only_unset y dry_run. Audita operación."
 
 # ==========================
 #  EDGE FUNCTIONS (Deno)
@@ -524,7 +539,7 @@ vistas:
   v_resumen_expediente:
     descripcion: "Totales por expediente: puntos totales, marcados, monitoreados, descartados, replanteados, añadidos, % completitud."
   v_resumen_por_locacion:
-    descripcion: "Totales por locación (por expediente)."
+    descripcion: "Totales por locación (por expediente), con flags de completitud: marcado_completo (todos marcados=HECHO o DESCARTADO) y monitoreado_completo (todos monitoreados=HECHO o DESCARTADO)."
   v_resumen_planificacion:
     descripcion: "Asignado vs realizado por día/frente/actividad."
 
@@ -569,6 +584,11 @@ frontend_spec:
       - "Export XLSX via edge function; descarga desde /api/export/*"
     carga_excel:
       - "Subir a Supabase Storage (bucket uploads) y llamar a edge function import_*"
+    acciones_masivas_locacion:
+      - "Botones por LOCACION: 'Marcar locación' y 'Monitorear locación' (en tabs Monitoreo)"
+      - "Modal de confirmación con vista previa (dry_run) y conteo de filas afectadas"
+      - "Ejecutar RPC: rpc_bulk_update_locacion_marcado / rpc_bulk_update_locacion_monitoreo"
+      - "Badge 'Completa' cuando v_resumen_por_locacion indique completitud"
     offline_web:
       almacenamiento:
         - IndexedDB (Dexie o idb-keyval) para caches de asignaciones y puntos
@@ -727,6 +747,8 @@ validaciones:
   - replanteo_suffix: "Si tipo_origen=REPLANTEO => sufijo 'R' y parent_punto_id obligatorio"
   - monitoreado_accion: "Si monitoreado_status=HECHO y no se envía monitoreado_accion_id, backend autoasigna por fecha (f_default_accion_por_fecha); si hay ambigüedad, rechazar con 409."
   - captura_coords: "Se aceptan captura_geom_4326 y captura_precision_m al actualizar avance; si vienen, se almacenan con captura_at=now(); no obligatorios."
+  - insert_replanteo_anadido_rls: "RLS de INSERT permite a SUPERVISOR/MONITOR/LIDER solo tipo_origen IN ('REPLANTEO','ANADIDO') y expediente asignado; ADMIN puede todo."
+  - bulk_locacion_guardrails: "RPCs bulk solo afectan puntos del expediente asignado; si status=DESCARTADO requiere motivo; 'only_unset=true' evita sobrescribir HECHO; 'dry_run=true' no realiza cambios y devuelve conteos."
 
 # ==========================
 #  PERFILES DE PERMISO (matriz)
@@ -788,8 +810,13 @@ flujos:
       - Añade miembros y asignaciones (por locación o punto/ítem)
   - nombre: Avance en campo
     pasos:
-      - Equipo actualiza marcado/monitoreado/volado desde el frontend (estatus se recalcula por trigger)
-      - Replanteos/añadidos crean nuevas filas según reglas
-  - nombre: Exportación
+      - En Monitoreo, filtra por LOCACION o usa Acciones por Locación.
+      - Para cerrar rápido: 'Marcar locación' o 'Monitorear locación' → abre modal con preview (dry_run). Si confirmas, ejecuta RPC bulk.
+      - Si necesitas ajuste fino: en un punto específico, usa 'Replantear' (llama rpc_crear_replanteo) o 'Añadir punto' (rpc_crear_anadido).
+      - Completa avance del nuevo 'R' o del añadido. Triggers recalculan estatus y sellan acción/fechas.
+      - Dashboard y vista por locación muestran 'Completa' solo si todos los puntos están HECHO o DESCARTADO.
+  - nombre: Acciones masivas por locación
     pasos:
-      - Supervisor líder/ADMIN descargan XLSX filtrado por expediente
+      - Selecciona LOCACION → 'Marcar locación' (status=HECHO) o 'Monitorear locación' (status=HECHO, con acción propuesta por fecha).
+      - Opciones: only_unset (no pisa HECHO), dry_run (muestra conteos sin aplicar), motivo (si DESCARTADO).
+      - Confirmar → ejecutar RPC y refrescar v_resumen_por_locacion.
