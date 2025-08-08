@@ -9,10 +9,16 @@ All domain tables implement RLS with a **gatekeeper pattern** as the base securi
 exists(
   select 1 from public.supervisores s
   where s.email = (auth.jwt() ->> 'email')::citext
-  and s.activo = true
-  and s.deleted_at is null
+  and s.is_active = true
+  and s.is_deleted = false
 )
 ```
+
+## Frontend Gatekeeper Implementation (Fase 2)
+- **Component**: `components/auth/gatekeeper.tsx`
+- **Verification**: Checks user email against `supervisores` table
+- **UI States**: Loading, Authorized, Access Denied
+- **Integration**: Applied to all protected routes via `(protected)` layout
 
 ## Security Functions
 - `get_current_supervisor()`: Returns UUID of current user from JWT
