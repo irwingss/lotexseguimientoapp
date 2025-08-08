@@ -1,0 +1,16 @@
+nombre_completo,rol,email
+Ángeles Mendiola Omar Jair,Supervisor líder, mock@gmail.com
+Alvarado Alama Armando Alonso,Monitor,mock@gmail.com
+Atúncar Quispe José Sebastián,Supervisor,mock@gmail.com
+Bautista Rivera Yecenia Elizabeth,Supervisor,mock@gmail.com
+Bustamante Bustamante Anarela Yamalin,Supervisor líder,mock@gmail.com
+Carbajal Seguil Víctor Hugo,Monitor,mock@gmail.com
+Castañeda Dávila Marco Antonio,Supervisor líder,mock@gmail.com
+Chipana De la Cruz, Julio Fermín,Monitor,mock@gmail.com
+Coronado Sáenz Richard Arturo,Supervisor líder,mock@gmail.com
+Effio Herrera Jhonattan Javier,Supervisor,mock@gmail.com
+Jara Perea Andrews Junior,Monitor,mock@gmail.com
+Liñán Flores Edward Luis,Supervisor líder,mock@gmail.com
+Muñoz Rosales Sandra Pilar,Supervisor líder,mock@gmail.com
+Ríos Quispe Jonathan Jason,Supervisor,mock@gmail.com
+Saldaña Ugaz Irwing Smith,Supervisor,irwingssaldu@gmail.com
