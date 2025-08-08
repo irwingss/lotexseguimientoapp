@@ -1,0 +1,790 @@
+# Lote X – Backend Logic Spec (v0.1)
+# Formato: YAML legible por AI/IDE (objetivo: servir como single source of truth)
+# Fecha: 2025-08-08  |  Zona horaria: America/Lima
+# Stack propuesto (backend): Supabase (Postgres 15 + RLS + Edge Functions/Deno) + PostGIS
+# Frontend/Runtime (referencia): Next.js (TypeScript) + Supabase client + TailwindCSS + shadcn/ui. (Se puede cambiar sin romper el contrato RPC).
+
+meta:
+  proyecto: "OEFA – Seguimiento de actividades de supervisión ambiental (Lote X)"
+  propietario: "OEFA, Perú"
+  version: "0.1"
+  idioma: "es-PE"
+  objetivos:
+    - Autenticación con Google restringida por lista blanca (tabla supervisores).
+    - Carga de catálogos por ADMIN (puntos de monitoreo y vuelo desde Excel).
+    - Gestión de expedientes (mes a mes) y códigos de acción asociados.
+    - Asignación de personal a expedientes y planificación diaria por frentes.
+    - Registro de avance (marcado/monitoreo/volado) con motivos de descarte.
+    - Dashboard con métricas de completitud (global y por frente/día/locación).
+
+stack:
+  supabase:
+    db: postgres
+    extensions:
+      - postgis
+      - pgcrypto          # gen_random_uuid
+      - citext            # emails case-insensitive
+    auth:
+      provider: google
+      access_gate: "El email del JWT debe existir y estar activo en public.supervisores"
+    storage:
+      buckets:
+        - nombre: uploads
+          proposito: "Carga de archivos XLSX de monitoreo y vuelo"
+  runtime:
+    edge_functions:
+      lenguaje: deno
+      funciones:
+        - import_monitoreo_from_xlsx
+        - import_vuelos_from_xlsx
+        - export_monitoreo_xlsx
+        - export_vuelos_xlsx
+    rpc_sql: true  # usamos funciones SQL expuestas como RPC /rest/v1/rpc/*
+
+convenciones:
+  schema: public
+  case: snake_case
+  fechas: timestamptz (UTC) y date cuando corresponda (sin TZ)
+  srid_utm_17s: 32717  # WGS84 / UTM zone 17S (costa norte del Perú)
+
+# ==========================
+#  ENUMS
+# ==========================
+
+enums:
+  supervisor_role: [ADMIN, SUPERVISOR, SUPERVISOR_LIDER, MONITOR, CONDUCTOR, RESPONSABLE_OIG]
+  status_trabajo: [PENDIENTE, HECHO, DESCARTADO]
+  punto_estatus: [PENDIENTE, MARCADO, MONITOREADO, MARCADO_Y_MONITOREADO, DESCARTADO, REPLANTEADO, ANADIDO]
+  vuelo_tipo: [PAF, PD]
+  asignacion_target: [LOCACION, PUNTO_MONITOREO, VUELO_ITEM]
+  actividad_tipo: [MARCAR, MONITOREAR, VOLAR]
+
+# ==========================
+#  TABLAS
+# ==========================
+
+tablas:
+  supervisores:
+    descripcion: "Lista blanca de accesos y roles fijos por persona. Gestionable por ADMIN desde la app."
+    columnas:
+      - id: uuid primary key default gen_random_uuid()
+      - nombre: text not null
+      - email: citext unique not null
+      - rol: supervisor_role not null
+      - is_active: boolean not null default true
+      - created_at: timestamptz not null default now()
+      - is_deleted: boolean not null default false
+      - deleted_at: timestamptz
+      - deleted_by_supervisor_id: uuid references public.supervisores(id)
+      - deleted_geom_4326: geometry(Point, 4326)
+      - deleted_precision_m: double precision
+      - deleted_reason: text
+    indices:
+      - unique_email: unique(email)
+
+  expedientes:
+    descripcion: "Expediente mensual (supervisión)."
+    columnas:
+      - id: uuid primary key default gen_random_uuid()
+      - expediente_codigo: text not null  # código oficial del expediente
+      - nombre: text not null             # nombre legible de la supervisión
+      - created_by_supervisor_id: uuid references public.supervisores(id)
+      - created_at: timestamptz not null default now()
+      - updated_at: timestamptz not null default now()
+      - is_deleted: boolean not null default false
+      - deleted_at: timestamptz
+      - deleted_by_supervisor_id: uuid references public.supervisores(id)
+      - deleted_geom_4326: geometry(Point, 4326)
+      - deleted_precision_m: double precision
+      - deleted_reason: text
+    indices:
+      - idx_expediente_codigo: btree(expediente_codigo)
+
+  acciones:
+    descripcion: "Códigos de acción (1..2) por expediente, con rango de fechas."
+    columnas:
+      - id: uuid primary key default gen_random_uuid()
+      - expediente_id: uuid references public.expedientes(id) on delete cascade
+      - codigo_accion: text not null
+      - fecha_inicio: date not null
+      - fecha_fin: date not null
+      - created_at: timestamptz not null default now()
+      - is_deleted: boolean not null default false
+      - deleted_at: timestamptz
+      - deleted_by_supervisor_id: uuid references public.supervisores(id)
+      - deleted_geom_4326: geometry(Point, 4326)
+      - deleted_precision_m: double precision
+      - deleted_reason: text
+    constraints:
+      - unique_expediente_accion: unique(expediente_id, codigo_accion)
+
+  expediente_supervisores:
+    descripcion: "Asignación de personal (por rol fijo) a un expediente."
+    columnas:
+      - id: uuid primary key default gen_random_uuid()
+      - expediente_id: uuid references public.expedientes(id) on delete cascade
+      - supervisor_id: uuid references public.supervisores(id) on delete cascade
+      - assigned_at: timestamptz not null default now()
+      - is_deleted: boolean not null default false
+      - deleted_at: timestamptz
+      - deleted_by_supervisor_id: uuid references public.supervisores(id)
+      - deleted_geom_4326: geometry(Point, 4326)
+      - deleted_precision_m: double precision
+      - deleted_reason: text
+    constraints:
+      - unique_asignacion: unique(expediente_id, supervisor_id)
+
+  monitoreo_puntos:
+    descripcion: "TABLA DE MONITOREO (Excel de puntos) + columnas de avance/cambios. Una sola tabla con todos los expedientes."
+    columnas:
+      # Identificación
+      - id: uuid primary key default gen_random_uuid()
+      - expediente_id: uuid references public.expedientes(id) on delete cascade
+      - locacion: text not null
+      - cod_celda: text not null
+      - cod_grilla: text not null
+      - este: double precision not null
+      - norte: double precision not null
+      - prof: double precision
+      - p_superpos: text
+      - cod_punto_campo: text not null
+      - cod_colectora: text not null
+      - distancia: text
+      - geom: geometry(Point, 32717)  # set por trigger
+      # Avance (campos editables en terreno)
+      - marcado_status: status_trabajo not null default PENDIENTE
+      - marcado_motivo: text  # requerido si DESCARTADO
+      - monitoreado_status: status_trabajo not null default PENDIENTE
+      - monitoreado_motivo: text  # requerido si DESCARTADO
+      - monitoreado_accion_id: uuid references public.acciones(id)  # acción efectiva del monitoreo
+      - monitoreado_at: timestamptz  # timestamp de cuando se cambió a HECHO
+      - estatus: punto_estatus not null default PENDIENTE  # mantenido por trigger en base a los dos anteriores + origen
+      # Captura de posición del dispositivo al registrar avance (opcional)
+      - captura_geom_4326: geometry(Point, 4326)
+      - captura_precision_m: double precision
+      - captura_at: timestamptz
+      - captura_fuente: text default 'MANUAL'  # MANUAL | GPS
+      # Origen de punto y vínculos
+      - tipo_origen: text not null default 'ORIGINAL'  # ORIGINAL | REPLANTEO | ANADIDO (texto para evitar colisión con enum-nombre)
+      - parent_punto_id: uuid references public.monitoreo_puntos(id)
+      - created_at: timestamptz not null default now()
+      - updated_at: timestamptz not null default now()
+      - is_deleted: boolean not null default false
+      - deleted_at: timestamptz
+      - deleted_by_supervisor_id: uuid references public.supervisores(id)
+      - deleted_geom_4326: geometry(Point, 4326)
+      - deleted_precision_m: double precision
+      - deleted_reason: text
+    constraints:
+      - unique_por_expediente_cod_punto: unique(expediente_id, cod_punto_campo)
+      - unique_por_expediente_cod_colectora: unique(expediente_id, cod_colectora)
+    indices:
+      - idx_monitoreo_expediente: btree(expediente_id)
+      - idx_monitoreo_locacion: btree(locacion)
+      - idx_monitoreo_geom: gist(geom)
+
+  vuelos_items:
+    descripcion: "TABLA DE VUELO (Excel de items PAF/PD) + avance de marcado/volado."
+    columnas:
+      - id: uuid primary key default gen_random_uuid()
+      - expediente_id: uuid references public.expedientes(id) on delete cascade
+      - item: integer not null
+      - tipo: vuelo_tipo not null  # PAF o PD
+      - codigo: text not null
+      - este: double precision not null
+      - norte: double precision not null
+      - base: text
+      - geom: geometry(Point, 32717)
+      - marcado_status: status_trabajo not null default PENDIENTE
+      - marcado_motivo: text  # requerido si DESCARTADO
+      - volado_status: status_trabajo not null default PENDIENTE
+      - volado_motivo: text    # requerido si DESCARTADO
+      # Captura de posición del dispositivo al registrar avance (opcional)
+      - captura_geom_4326: geometry(Point, 4326)
+      - captura_precision_m: double precision
+      - captura_at: timestamptz
+      - captura_fuente: text default 'MANUAL'  # MANUAL | GPS
+      - created_at: timestamptz not null default now()
+      - updated_at: timestamptz not null default now()
+      - is_deleted: boolean not null default false
+      - deleted_at: timestamptz
+      - deleted_by_supervisor_id: uuid references public.supervisores(id)
+      - deleted_geom_4326: geometry(Point, 4326)
+      - deleted_precision_m: double precision
+      - deleted_reason: text
+    constraints:
+      - unique_por_expediente_codigo: unique(expediente_id, codigo)
+    indices:
+      - idx_vuelos_expediente: btree(expediente_id)
+      - idx_vuelos_geom: gist(geom)
+
+  planificacion_diaria:
+    descripcion: "Pestaña PLANIFICAR – definición de frentes por día y actividad."
+    columnas:
+      - id: uuid primary key default gen_random_uuid()
+      - expediente_id: uuid references public.expedientes(id) on delete cascade
+      - fecha: date not null
+      - frente_numero: integer not null  # Frente 1, 2, 3, ...
+      - actividad: text not null
+      - accion_id: uuid references public.acciones(id)  # por defecto: resuelto por fecha, editable
+      - created_by_supervisor_id: uuid references public.supervisores(id)
+      - created_at: timestamptz not null default now()
+    constraints:
+      - unique_frente_dia: unique(expediente_id, fecha, frente_numero)
+
+  planificacion_miembros:
+    descripcion: "Miembros por frente (día)." 
+    columnas:
+      - id: uuid primary key default gen_random_uuid()
+      - planificacion_id: uuid references public.planificacion_diaria(id) on delete cascade
+      - supervisor_id: uuid references public.supervisores(id)
+      - rol: supervisor_role not null  # redundante a rol fijo, sirve para claridad del frente
+      - added_at: timestamptz not null default now()
+    constraints:
+      - unique_miembro_en_frente: unique(planificacion_id, supervisor_id)
+
+  planificacion_asignaciones:
+    descripcion: "Qué le toca a cada frente: locaciones o puntos/ítems específicos, con tipo de actividad."
+    columnas:
+      - id: uuid primary key default gen_random_uuid()
+      - planificacion_id: uuid references public.planificacion_diaria(id) on delete cascade
+      - target_type: asignacion_target not null  # LOCACION | PUNTO_MONITOREO | VUELO_ITEM
+      - locacion: text  # si target_type = LOCACION
+      - punto_monitoreo_id: uuid references public.monitoreo_puntos(id)
+      - vuelo_item_id: uuid references public.vuelos_items(id)
+      - actividad: actividad_tipo not null  # MARCAR | MONITOREAR | VOLAR
+      - added_at: timestamptz not null default now()
+
+  auditoria_eventos:
+    descripcion: "Bitácora mínima de cambios críticos (quién, qué, cuándo)."
+    columnas:
+      - id: bigint primary key generated always as identity
+      - evento: text not null
+      - detalle: jsonb not null
+      - actor_email: citext
+      - created_at: timestamptz not null default now()
+
+# ==========================
+#  REGLAS DE NEGOCIO CLAVE
+# ==========================
+
+reglas_negocio:
+  autenticacion:
+    - "El login por Google NO concede acceso a datos si el email no existe y está activo en public.supervisores."
+    - "El rol es único y fijo por supervisor (definido en public.supervisores)."
+  carga_excel:
+    - "Solo ADMIN puede cargar XLSX de monitoreo/vuelo."
+    - "Cada carga se asocia a una 'supervisión' (expediente.nombre) provista por el admin; backend deriva expediente_id y acciones relacionadas."
+    - "Validar columnas exactas del Excel (nombres y tipos); rechazar si faltan o sobran."
+    - "Upsert por (expediente_id, cod_punto_campo) en monitoreo y por (expediente_id, codigo) en vuelo."
+  avance_en_campo:
+    - "marcado_status y monitoreado_status aceptan: PENDIENTE, HECHO, DESCARTADO."
+    - "Si DESCARTADO => motivo obligatorio."
+    - "estatus se recalcula autom. (trigger):
+         - DESCARTADO si alguno DESCARTADO
+         - MARCADO si marcado=HECHO y monitoreado=PENDIENTE
+         - MONITOREADO si marcado=PENDIENTE y monitoreado=HECHO (permite casos excepcionales)
+         - MARCADO_Y_MONITOREADO si ambos=HECHO
+         - REPLANTEADO para registros tipo_origen=REPLANTEO (nuevo registro) y ANADIDO para tipo_origen=ANADIDO"
+    - "Replanteo: se crea NUEVO punto con tipo_origen=REPLANTEO y parent_punto_id=ID del original; cod_punto_campo y cod_colectora deben ser el código original + 'R'. El punto original debe quedar DESCARTADO con motivo."
+    - "Añadido: NUEVO punto con tipo_origen=ANADIDO (sin requisito de sufijo)."
+  planificacion:
+    - "Supervisor líder (y ADMIN) crean/editar FRNTES por día."
+    - "acción por día: por defecto se setea buscando acciones donde fecha in [fecha_inicio, fecha_fin]; el usuario puede cambiarla manualmente."
+    - "Asignaciones pueden apuntar a LOCACION (batch) o a puntos/ítems específicos."
+    - "Dashboard compara asignado vs realizado (por día/frente/actividad)."
+  exportaciones:
+    - "Supervisor líder y ADMIN pueden exportar a XLSX el filtrado de Monitoreo/Vuelo del expediente activo."
+
+# ==========================
+#  MODO DE EDICIÓN
+# ==========================
+
+edicion_modo:
+  actual: por_expediente  # opciones: por_expediente | estricto
+  descripcion:
+    - "por_expediente: cualquier usuario asignado al expediente puede editar el avance de cualquier punto/ítem de ese expediente (según su rol)."
+    - "estricto: un usuario solo puede editar lo que su frente tiene asignado para la fecha (planificacion_asignaciones), y solo durante esa fecha."
+  rls_estricto_pseudologica:
+    - "Existe planificacion_diaria pd para CURRENT_DATE y expediente_id; el usuario pertenece a ese pd vía planificacion_miembros (por email en JWT -> supervisores.id)."
+    - "Existe planificacion_asignaciones pa para ese pd que apunte a la LOCACION/PUNTO/VUELO_ITEM que se intenta editar."
+  notas:
+    - "Con 'estricto' evitamos que el Frente A actualice puntos asignados al Frente B."
+    - "Con 'por_expediente' ganamos flexibilidad cuando los frentes se mezclan en campo."
+
+# ==========================
+#  SOFT DELETE (aplica a todas las tablas de dominio)
+# ==========================
+
+soft_delete:
+  estrategia:
+    - "Nunca borramos físicamente; seteamos is_deleted=true, deleted_at=now(), deleted_by_supervisor_id, deleted_geom_4326 y deleted_precision_m (y optional deleted_reason)."
+    - "Las SELECT por defecto excluyen is_deleted=true mediante RLS (salvo ADMIN)."
+    - "Se proveen RPCs de borrado/restauración por tabla."
+  campos_comunes:
+    - is_deleted: boolean default false
+    - deleted_at: timestamptz
+    - deleted_by_supervisor_id: uuid references public.supervisores(id)
+    - deleted_geom_4326: geometry(Point, 4326)
+    - deleted_precision_m: double precision
+    - deleted_reason: text
+  reglas:
+    - "ADMIN puede soft-borrar en todas las tablas."
+    - "SUPERVISOR_LIDER puede soft-borrar en planificación (planificacion_*); en catálogos (monitoreo_puntos, vuelos_items) solo ADMIN."
+    - "Restauración (is_deleted=false) solo ADMIN."
+
+# ==========================
+#  RLS (ROW LEVEL SECURITY)
+# ==========================
+
+rls_policies:
+  base:
+    gatekeeper: "En TODAS las tablas de dominio, permitir acceso SOLO si existe en public.supervisores un registro activo con email = (auth.jwt()->>'email')."
+  por_tabla:
+    supervisores:
+      select:
+        - "Permitido a ADMIN (ver todos, incluidos is_deleted=true)."
+        - "Permitido al propio usuario para su fila (email del JWT = email) siempre que is_deleted=false."
+      insert_update_delete: ["Solo ADMIN (borrado lógico via RPC)."]
+    expedientes:
+      select: ["Permitido si el usuario está asignado en expediente_supervisores o es ADMIN; para no-ADMIN is_deleted=false."]
+      insert_update_delete: ["Solo ADMIN (borrado lógico via RPC)."]
+    acciones:
+      select: ["Permitido si el usuario tiene acceso al expediente padre o es ADMIN; para no-ADMIN is_deleted=false."]
+      insert_update_delete: ["Solo ADMIN (borrado lógico via RPC)."]
+    expediente_supervisores:
+      select: ["ADMIN y Supervisor líder; o cualquier usuario para ver sus propias asignaciones (is_deleted=false para no-ADMIN)."]
+      insert_update_delete: ["Solo ADMIN (borrado lógico via RPC)."]
+    monitoreo_puntos:
+      select: ["Permitido si pertenece a expedientes donde el usuario esté asignado o sea ADMIN/SUPERVISOR_LIDER; para no-ADMIN is_deleted=false."]
+      update:
+        - "SUPERVISOR, SUPERVISOR_LIDER, MONITOR pueden actualizar solo columnas de avance (marcado_*, monitoreado_*, tipo_origen, parent_punto_id cuando crean replanteo/añadido); no pueden cambiar is_deleted."
+      insert_delete: ["Solo ADMIN (vía importación) o SUPERVISOR_LIDER para replanteos/añadidos; borrado lógico vía RPC solo ADMIN."]
+    vuelos_items:
+      select: ["Mismo criterio que monitoreo_puntos; para no-ADMIN is_deleted=false."]
+      update:
+        - "SUPERVISOR, SUPERVISOR_LIDER, MONITOR pueden actualizar marcado_*/volado_*; no pueden cambiar is_deleted."
+      insert_delete: ["Solo ADMIN (vía importación); borrado lógico vía RPC solo ADMIN."]
+    planificacion_diaria:
+      select: ["Todos los asignados al expediente (is_deleted=false para no-ADMIN)."]
+      insert_update_delete: ["SUPERVISOR_LIDER y ADMIN (borrado lógico: SUPERVISOR_LIDER y ADMIN; restauración: solo ADMIN)."]
+    planificacion_miembros:
+      select: ["Todos los asignados al expediente (is_deleted=false para no-ADMIN)."]
+      insert_update_delete: ["SUPERVISOR_LIDER y ADMIN (borrado lógico: SUPERVISOR_LIDER y ADMIN; restauración: solo ADMIN)."]
+    planificacion_asignaciones:
+      select: ["Todos los asignados al expediente (is_deleted=false para no-ADMIN)."]
+      insert_update_delete: ["SUPERVISOR_LIDER y ADMIN (borrado lógico: SUPERVISOR_LIDER y ADMIN; restauración: solo ADMIN)."]
+    auditoria_eventos:
+      select: ["ADMIN y SUPERVISOR_LIDER (is_deleted=false para no-ADMIN; ADMIN puede ver todo)."]
+      insert: ["Cualquier operación backend que audite."]
+      delete_update: ["Solo ADMIN (se recomienda NO borrar; si fuera imprescindible, usar soft delete vía RPC)."]
+
+# Nota: Para condiciones de RLS usar expresiones del tipo:
+#   exists(select 1 from public.supervisores s where s.email = (auth.jwt()->>'email') and s.is_active)
+#   y para role-based:
+#   exists(select 1 from public.supervisores s where s.email = (auth.jwt()->>'email') and s.rol in ('ADMIN','SUPERVISOR_LIDER'))
+
+# ==========================
+#  TRIGGERS & FUNCIONES (SQL)
+# ==========================
+
+sql_funcs_y_triggers:
+  - nombre: f_block_hard_delete()
+    lenguaje: plpgsql
+    proposito: "Bloquear DELETE físico en tablas de dominio; forzar uso de soft delete (EXCEPTION)."
+    aplica_a: [supervisores, expedientes, acciones, expediente_supervisores, monitoreo_puntos, vuelos_items, planificacion_diaria, planificacion_miembros, planificacion_asignaciones, auditoria_eventos]
+    tipo: before delete
+  - nombre: f_set_point_geom()
+    lenguaje: plpgsql
+    proposito: "Derivar geom (UTM 17S) desde este/norte en inserts/updates."
+    aplica_a: [monitoreo_puntos, vuelos_items]
+    tipo: before insert or update
+  - nombre: f_enforce_replanteo_codes()
+    lenguaje: plpgsql
+    proposito: "Si tipo_origen=REPLANTEO: exigir parent_punto_id no nulo y que cod_punto_campo/cod_colectora = (select cod_punto_campo||'R'/cod_colectora||'R' del padre)."
+    aplica_a: [monitoreo_puntos]
+    tipo: before insert or update
+  - nombre: f_update_estatus_punto()
+    lenguaje: plpgsql
+    proposito: "Calcular estatus en base a marcado_status y monitoreado_status y tipo_origen; además, si hay transición a monitoreado_status=HECHO: set monitoreado_at=now() y (si es null) monitoreado_accion_id = f_default_accion_por_fecha(expediente_id, current_date)."
+    aplica_a: [monitoreo_puntos]
+    tipo: before insert or update
+  - nombre: f_default_accion_por_fecha(expediente_id, fecha)
+    lenguaje: sql
+    proposito: "Retorna accion_id cuyo rango cubre la fecha; null si ninguna."
+  - nombre: f_auditar_evento(evento text, detalle jsonb)
+    lenguaje: sql
+    proposito: "Insertar fila en auditoria_eventos con actor_email = auth.jwt()->>'email'"
+  - nombre: rpc_export_monitoreo(expediente_id uuid)
+    lenguaje: sql
+    proposito: "Retorna SETOF record con las columnas necesarias para exportación (cliente genera XLSX o edge function)."
+  - nombre: rpc_export_vuelos(expediente_id uuid)
+    lenguaje: sql
+    proposito: "Idem para TABLA DE VUELO."
+  - nombre: rpc_soft_delete_supervisor(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Marca is_deleted=true en supervisores; set deleted_* y actor desde JWT (email->id)."
+  - nombre: rpc_restore_supervisor(id uuid)
+    lenguaje: sql
+    proposito: "Restaura is_deleted=false en supervisores (solo ADMIN)."
+  - nombre: rpc_soft_delete_expediente(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Soft delete de expedientes (solo ADMIN)."
+  - nombre: rpc_restore_expediente(id uuid)
+    lenguaje: sql
+    proposito: "Restore de expedientes (solo ADMIN)."
+  - nombre: rpc_soft_delete_accion(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Soft delete de acciones (solo ADMIN)."
+  - nombre: rpc_restore_accion(id uuid)
+    lenguaje: sql
+    proposito: "Restore de acciones (solo ADMIN)."
+  - nombre: rpc_soft_delete_expediente_supervisor(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Soft delete de asignaciones (solo ADMIN)."
+  - nombre: rpc_restore_expediente_supervisor(id uuid)
+    lenguaje: sql
+    proposito: "Restore de asignaciones (solo ADMIN)."
+  - nombre: rpc_soft_delete_monitoreo_punto(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Soft delete de puntos (solo ADMIN)."
+  - nombre: rpc_restore_monitoreo_punto(id uuid)
+    lenguaje: sql
+    proposito: "Restore de puntos (solo ADMIN)."
+  - nombre: rpc_soft_delete_vuelo_item(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Soft delete de ítems de vuelo (solo ADMIN)."
+  - nombre: rpc_restore_vuelo_item(id uuid)
+    lenguaje: sql
+    proposito: "Restore de ítems de vuelo (solo ADMIN)."
+  - nombre: rpc_soft_delete_plan_diaria(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Soft delete de planificación diaria (ADMIN y SUPERVISOR_LIDER)."
+  - nombre: rpc_restore_plan_diaria(id uuid)
+    lenguaje: sql
+    proposito: "Restore de planificación diaria (solo ADMIN)."
+  - nombre: rpc_soft_delete_plan_miembro(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Soft delete de miembros del frente (ADMIN y SUPERVISOR_LIDER)."
+  - nombre: rpc_restore_plan_miembro(id uuid)
+    lenguaje: sql
+    proposito: "Restore de miembros del frente (solo ADMIN)."
+  - nombre: rpc_soft_delete_plan_asignacion(id uuid, geom4326 geometry, precision_m double precision, reason text)
+    lenguaje: sql
+    proposito: "Soft delete de asignaciones (ADMIN y SUPERVISOR_LIDER)."
+  - nombre: rpc_restore_plan_asignacion(id uuid)
+    lenguaje: sql
+    proposito: "Restore de asignaciones (solo ADMIN)."
+
+# ==========================
+#  EDGE FUNCTIONS (Deno)
+# ==========================
+
+edge_functions:
+  import_monitoreo_from_xlsx:
+    input:
+      - file_path_or_storage_key
+      - supervision_nombre: text  # nombre exacto del expediente
+    pasos:
+      - Resolver expediente_id por nombre; traer acciones asociadas.
+      - Leer XLSX (sheet 1) y validar columnas EXACTAS: [LOCACION, COD_CELDA, COD_GRILLA, ESTE, NORTE, PROF, P_SUPERPOS, COD_PUNTO_CAMPO, COD_COLECTORA, DISTANCIA]
+      - Mapear tipos/trim/upper según corresponda (ej. códigos)
+      - Insertar con upsert en public.monitoreo_puntos (por (expediente_id, cod_punto_campo))
+      - Registrar auditoría
+      - Responder counts: {inserted, updated, skipped, errors[]}
+
+  import_vuelos_from_xlsx:
+    input:
+      - file_path_or_storage_key
+      - supervision_nombre: text
+    pasos:
+      - Resolver expediente_id por nombre
+      - Validar columnas EXACTAS: [ITEM, TIPO, CODIGO, ESTE, NORTE, BASE]
+      - Insertar upsert por (expediente_id, codigo)
+      - Auditoría y resumen
+
+  export_monitoreo_xlsx:
+    input: [expediente_id]
+    salida: archivo XLSX con filtro aplicado
+
+  export_vuelos_xlsx:
+    input: [expediente_id]
+    salida: archivo XLSX con filtro aplicado
+
+# ==========================
+#  VISTAS para dashboard
+# ==========================
+
+vistas:
+  v_resumen_expediente:
+    descripcion: "Totales por expediente: puntos totales, marcados, monitoreados, descartados, replanteados, añadidos, % completitud."
+  v_resumen_por_locacion:
+    descripcion: "Totales por locación (por expediente)."
+  v_resumen_planificacion:
+    descripcion: "Asignado vs realizado por día/frente/actividad."
+
+# ==========================
+#  ENDPOINTS (opcionales si no se usa RPC directo)
+# ==========================
+
+api_contract:
+  estilo: "RPC Supabase preferido; opcional Next.js API routes"
+  rutas:
+    - POST /api/import/monitoreo {supervision_nombre, file}
+    - POST /api/import/vuelos {supervision_nombre, file}
+    - GET  /api/export/monitoreo?expediente_id=...
+    - GET  /api/export/vuelos?expediente_id=...
+
+# ==========================
+#  FRONTEND SPEC (Next.js + React Native)
+# ==========================
+
+frontend_spec:
+  web:
+    framework: Next.js (App Router)
+    language: TypeScript: true
+    ui: shadcn/ui + TailwindCSS
+    state: TanStack Query (React Query)
+    tables: TanStack Table
+    maps: MapLibre GL JS
+    pwa:
+      plugin: '@ducanh2912/next-pwa'  # soporta next 14/15
+      require_install: mobile_only  # iOS/Android obligatorio; desktop opcional
+      features:
+        - offline_cache_static
+        - runtime_caching_api
+        - background_sync_queue  # Workbox backgroundSync para mutaciones
+    auth:
+      proveedor: Supabase Auth (Google OAuth)
+      flujo:
+        - "Botón: supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${NEXT_PUBLIC_SITE_URL}/auth/callback` } })"
+        - "Callback (route handler): usar @supabase/ssr createServerClient para leer la sesión y setear cookies"
+        - "RLS: el JWT de Supabase viaja en el cliente; el gatekeeper de email/rol se aplica en Postgres"
+    descargas:
+      - "Export XLSX via edge function; descarga desde /api/export/*"
+    carga_excel:
+      - "Subir a Supabase Storage (bucket uploads) y llamar a edge function import_*"
+    offline_web:
+      almacenamiento:
+        - IndexedDB (Dexie o idb-keyval) para caches de asignaciones y puntos
+      cola_mutaciones:
+        - queue_name: 'mutations-queue'
+        - contenido: { recurso, recurso_id, accion, payload, client_mutation_id, created_local_at }
+        - envio: "Background Sync si disponible; fallback a reintentos con setInterval"
+        - idempotencia: "enviar client_mutation_id a RPC apply_mutation_* (futuro) o usar updated_at last-write-wins"
+      conflicto: "last-write-wins usando updated_at del servidor"
+    theming:
+      tailwind_config: tailwind.config.ts (content paths + preset shadcn + safelist para MapLibre popups)
+      css: app/globals.css (import tailwind base/components/utilities)
+    types:
+      - "supabase gen types typescript --project-id <ref> → /packages/types/db.ts"
+    calidad: ESLint + Prettier + Husky (pre-commit)
+
+  # OPCIONAL (futuro)
+  mobile:
+    comentario: "Si más adelante quieren app nativa, se sugiere Expo + Tamagui para compartir tokens. Hoy es webapp accesible por URL."
+
+  shared:
+    design_tokens:
+      - "Definir colores, espaciado, tipografías; compartir en tailwind.config"
+    validacion: zod
+    i18n: es-PE (dayjs timezone America/Lima)
+    calidad: ESLint + Prettier + Husky (pre-commit)
+
+# ==========================
+#  WEB OFFLINE (PWA)
+# ==========================
+
+web_offline_pwa:
+  objetivo: "Usabilidad en campo con conectividad intermitente desde el navegador (instalable como app)."
+  install_gate:
+    requirement: "Obligatorio instalar en iOS/Android; desktop opcional (no se bloquea)"
+    detection:
+      - "is_mobile: navigator.userAgentData?.mobile || /Android|iPhone|iPad/i.test(navigator.userAgent)"
+      - "display-mode: standalone via matchMedia('(display-mode: standalone)')"
+      - "iOS: 'navigator.standalone' === true"
+    ux:
+      - "Si es móvil y no está instalada, bloquear con pantalla 'Instalar app' (Android: beforeinstallprompt; iOS: instrucciones)"
+      - "Si es desktop, mostrar banner no bloqueante 'Puedes instalar la app' y permitir continuar"
+      - "Tras instalar en móvil y abrir en standalone, permitir login y uso"
+    env_flag: NEXT_PUBLIC_REQUIRE_INSTALL=MOBILE_ONLY
+    cookie_hint: "Al abrir en standalone, setear cookie 'pwa_installed=1' para guardas de ruta en SSR"
+  precarga:
+    - "Después del login, botón 'Pre-cargar expediente' (obligatorio) que baja asignaciones/puntos del día a IndexedDB"
+    - "Mostrar estado 'Listo para offline' cuando termine"
+  caches:
+    - static_assets: "/_next/static/*, fuentes, íconos"
+    - api_get: "/rest/v1/* (lecturas de Supabase) con TTL corto y 'stale-while-revalidate'"
+    - map_tiles_opcional: "si se usa un estilo libre/licenciado, cache controlado"
+  indexeddb:
+    stores:
+      - assignments_cache
+      - points_cache
+      - mutations_queue
+  background_sync:
+    - workbox_background_sync: true
+    - fallback_polling_ms: 15000
+  online_indicator:
+    - "UI muestra estado online/offline y tamaño de cola"
+  seguridad:
+    - "JWT solo en memoria/cookie HttpOnly (SSR). No persistir tokens en IndexedDB"
+
+# ==========================
+#  DEPLOYMENT (GitHub → Vercel)
+# ==========================
+# ==========================
+
+deploy_vercel:
+  flujo:
+    - "Push del repo a GitHub → Importar en Vercel → seleccionar directorio web (Next.js)."
+    - "Configurar variables de entorno en Vercel (no subir valores al repo)."
+    - "En Supabase → Auth → URL Config: set 'SITE URL' = producción Vercel y 'Additional Redirect URLs' incluir: producción y localhost."
+    - "Habilitar proveedor Google en Supabase (client id/secret)."
+    - "Activar PWA en next.config.mjs con @ducanh2912/next-pwa (modo production)"
+    - "Agregar manifest.json (name, short_name, start_url='/', display='standalone', scope='/', icons, theme_color, background_color)"
+    - "Configurar dominio personalizado en Vercel (opcional). La app queda accesible por URL pública."
+  env_web_vercel:
+    - NEXT_PUBLIC_SITE_URL: "https://tu-dominio.vercel.app (o custom)"
+    - NEXT_PUBLIC_SUPABASE_URL: "https://<PROJECT_REF>.supabase.co"
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY: "ANON KEY (pública)"
+    - NEXT_PUBLIC_REQUIRE_INSTALL: "MOBILE_ONLY"
+    - SUPABASE_SERVICE_ROLE: "Service Role (solo server, NUNCA en cliente)"
+    - SUPABASE_ACCESS_TOKEN: "para GitHub Actions del CLI (opcional)"
+    - SUPABASE_PROJECT_REF: "ref del proyecto (xxxxxxxxxxxx) (opcional CI)"
+    - NEXT_PUBLIC_MAP_STYLE_URL: "opcional: estilo de MapLibre"
+  supabase_auth_redirects:
+    site_url: "${NEXT_PUBLIC_SITE_URL}"
+    additional_redirect_urls:
+      - "${NEXT_PUBLIC_SITE_URL}/auth/callback"
+      - "http://localhost:3000/auth/callback"
+  next_config:
+    archivos_clave:
+      - app/auth/callback/route.ts: "intercambia el código de OAuth y establece cookies de sesión"
+      - middleware.ts: "refresca sesión con createMiddlewareClient (opcional)"
+      - lib/supabase/server.ts: "createServerClient para SSR"
+      - lib/supabase/client.ts: "createBrowserClient para client-side"
+      - next.config.mjs: "configurar PWA y domains de imágenes/mapas"
+      - public/manifest.json: "PWA manifest (display='standalone', start_url, icons)"
+      - tailwind.config.ts: "theme, presets shadcn, content paths"
+      - postcss.config.js: "tailwind y autoprefixer"
+      - app/globals.css: "import de tailwind base/components/utilities"
+    runtime: "Edge o Node (por defecto) — SSR recomendado en páginas protegidas"
+  storage_uploads:
+    bucket: uploads
+    nota_cors: "Edge Functions deben devolver Access-Control-Allow-Origin: ${NEXT_PUBLIC_SITE_URL} y http://localhost:3000"
+  edge_functions_cors:
+    headers:
+      - Access-Control-Allow-Origin: "${NEXT_PUBLIC_SITE_URL}"
+      - Access-Control-Allow-Methods: "GET,POST,OPTIONS"
+      - Access-Control-Allow-Headers: "authorization, x-client-info, apikey, content-type"
+  github_actions_opcional:
+    objetivo: "correr migraciones en main antes de desplegar"
+    secreto_requerido: [SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF]
+    ejemplo_yaml: |
+      name: supabase-migrations
+      on:
+        push:
+          branches: [main]
+      jobs:
+        push:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - uses: supabase/setup-cli@v1
+            - run: supabase db push --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+              env:
+                SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+# ==========================
+#  VALIDACIONES CLAVE
+# ==========================
+
+web_requirements:
+  - "TypeScript obligatorio (tsconfig.json)"
+  - "Tailwind habilitado (tailwind.config.ts + postcss.config.js + globals.css)"
+  - "PWA obligatoria en móviles: NEXT_PUBLIC_REQUIRE_INSTALL=MOBILE_ONLY; en desktop no bloquear (solo banner sugerido)"
+  - "Manifest.json con display='standalone' y start_url='/'"
+  - "No persistir claves sensibles en el cliente; usar solo ANON KEY en navegador"
+  - "Edge Functions con CORS para dominio Vercel y localhost"
+
+# ==========================
+
+# ==========================
+
+validaciones:
+  - soft_delete_coords_required: "RPCs de soft delete requieren deleted_geom_4326 no nulo y precision; backend setea deleted_at automáticamente y deleted_by_supervisor_id usando el email del JWT."
+  - email_en_lista_blanca: "Denegar SELECT a todo si no pasa el gatekeeper."
+  - excel_monitoreo_cols: [LOCACION, COD_CELDA, COD_GRILLA, ESTE, NORTE, PROF, P_SUPERPOS, COD_PUNTO_CAMPO, COD_COLECTORA, DISTANCIA]
+  - excel_vuelo_cols: [ITEM, TIPO, CODIGO, ESTE, NORTE, BASE]
+  - coordenadas: "ESTE/NORTE numéricos válidos UTM17S, geom derivado"
+  - motivos_descartes: "obligatorio si status=DESCARTADO"
+  - codigos_unicos: "unique por expediente (cod_punto_campo / cod_colectora / codigo)"
+  - replanteo_suffix: "Si tipo_origen=REPLANTEO => sufijo 'R' y parent_punto_id obligatorio"
+  - monitoreado_accion: "Si monitoreado_status=HECHO y no se envía monitoreado_accion_id, backend autoasigna por fecha (f_default_accion_por_fecha); si hay ambigüedad, rechazar con 409."
+  - captura_coords: "Se aceptan captura_geom_4326 y captura_precision_m al actualizar avance; si vienen, se almacenan con captura_at=now(); no obligatorios."
+
+# ==========================
+#  PERFILES DE PERMISO (matriz)
+# ==========================
+
+permisos:
+  ADMIN:
+    - Gestiona supervisores (CRUD)
+    - Crea/edita/borrar expedientes y acciones
+    - Carga/borra catálogos Excel (monitoreo/vuelo)
+    - Exporta XLSX
+    - Ve todo
+  SUPERVISOR_LIDER:
+    - Lee todo del expediente asignado
+    - Actualiza avance (monitoreo/vuelo)
+    - Crea/edita planificación (frentes, miembros, asignaciones)
+    - Exporta XLSX
+  SUPERVISOR:
+    - Lee del expediente asignado
+    - Actualiza avance (monitoreo/vuelo)
+  MONITOR:
+    - Lee del expediente asignado
+    - Actualiza avance (monitoreo/vuelo)
+  CONDUCTOR:
+    - Lee planificación del expediente asignado
+  RESPONSABLE_OIG:
+    - Lectura general del expediente asignado (incluye dashboard)
+
+# ==========================
+#  SECUENCIAS DE USO (happy path)
+# ==========================
+
+flujos:
+  - nombre: Primer uso (móvil: instalación obligatoria)
+    pasos:
+      - Usuario abre la URL en un dispositivo iOS/Android (online)
+      - Si no está en modo standalone, muestra pantalla "Instalar app" (Android: beforeinstallprompt; iOS: instrucciones)
+      - Usuario instala y vuelve a abrir desde el ícono (modo standalone)
+      - La app permite login con Google y muestra botón "Pre-cargar expediente" (obligatorio)
+      - Al finalizar la precarga, muestra estado "Listo para offline"
+  - nombre: Primer uso (desktop: sin instalación obligatoria)
+    pasos:
+      - Usuario abre la URL en laptop/desktop (online)
+      - Se muestra un banner opcional "Instalar app"; puede ignorarlo
+      - Puede iniciar sesión y (recomendado) ejecutar "Pre-cargar expediente" para trabajar si se queda sin red
+  - nombre: Ingreso
+    pasos:
+      - Usuario abre la PWA instalada (standalone) y hace login con Google en Supabase Auth
+      - RLS verifica email en public.supervisores; si no existe o inactivo => cero acceso
+      - Si existe => frontend carga lista de expedientes accesibles (join por expediente_supervisores o rol ADMIN)
+  - nombre: Carga de monitoreo (ADMIN)
+    pasos:
+      - ADMIN selecciona expediente (por nombre) y sube XLSX
+      - Edge function valida e inserta (upsert) en monitoreo_puntos
+      - Auditoría registra conteos
+  - nombre: Planificación diaria (Supervisor líder)
+    pasos:
+      - Crea/edita frentes por fecha; sistema propone accion_id por rango
+      - Añade miembros y asignaciones (por locación o punto/ítem)
+  - nombre: Avance en campo
+    pasos:
+      - Equipo actualiza marcado/monitoreado/volado desde el frontend (estatus se recalcula por trigger)
+      - Replanteos/añadidos crean nuevas filas según reglas
+  - nombre: Exportación
+    pasos:
+      - Supervisor líder/ADMIN descargan XLSX filtrado por expediente

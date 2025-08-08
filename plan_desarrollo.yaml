@@ -1,0 +1,354 @@
+# Plan de Desarrollo – Lote X (v0.1)
+# Formato: YAML legible por AI/IDE para ejecución secuencial
+# Fuente de verdad funcional: backend-spec-lote-x-v0.1.yaml (este plan lo implementa)
+# Alcance: WebApp Next.js (TypeScript + Tailwind + shadcn/ui) + Supabase + PWA (móvil instalación obligatoria)
+
+meta:
+  proyecto: "OEFA – Seguimiento de supervisión ambiental (Lote X)"
+  owner: "OEFA, Perú"
+  timezone: "America/Lima"
+  repos:
+    web: oefa-lote-x-web
+  despliegue:
+    plataforma: vercel
+    base_datos: supabase (Postgres + PostGIS)
+    edge_functions: supabase (Deno)
+  referencias:
+    - backend_spec: backend-spec-lote-x-v0.1.yaml
+    - root_spec: specs_app.yaml  # INMUTABLE: no modificar (single source of truth en la raíz del repo)
+
+principios:
+  - "Puedes construir las tablas en Supabase usando el MCP que ya está conectado a tu disposición como herramienta."
+  - "Para el desarrollo frontend, cuando vayas a usar shadcn usa el MCP que ya está conectado si se requiere."
+  - "Construir de atrás hacia adelante: esquema + RLS + RPC antes del UI."
+  - "Cada historia tiene DoD (Definition of Done) con pruebas y verificación RLS."
+  - "Nada a producción sin revisiones (PR + checklist + previsualización Vercel)."
+  - "PWA: en móviles, instalación y precarga obligatorias antes de uso."
+  - "Telemetría y logs desde el día 1 (Sentry opcional, logs de Edge Functions y Postgres)."
+  - "SS&T: Ninguna fase se cierra si no está **Sellada, Saneada, Testeada** y **Documentada** (actualización de /docs obligatoria)."
+  - "Fuente única del proyecto: **/specs_app.yaml** en la raíz. Debe respetarse al pie de la letra y **nunca** debe ser modificado."
+
+documentacion:
+  politica:
+    - "Obligatoria al cierre de cada fase (SS&T Gate)."
+    - "Merge a main bloqueado si no hay actualización de docs (revisión en PR)."
+  estructura:
+    carpeta: docs/
+    archivos:
+      - 00-Overview.md
+      - 01-Architecture.md
+      - 02-DB-Schema.md
+      - 03-RLS-Matrix.md
+      - 04-API-RPC.md
+      - 05-Edge-Functions.md
+      - 06-Frontend-UI.md
+      - 07-Offline-PWA.md
+      - 08-Deployment.md
+      - 09-Runbook-Incidentes.md
+      - 10-UAT-Checklist.md
+      - 11-Changelog.md
+      - ADRs/ADR-000-template.md
+  templates:
+    adr: "Decisión, contexto, alternativas, consecuencias"
+    cambio: "Qué cambió, por qué, cómo probar, impacto RLS"
+  doc_por_fase:
+    0_bootstrap_repo:
+      - 00-Overview.md
+      - 01-Architecture.md (esqueleto)
+      - 11-Changelog.md (entrada inicial)
+    1_db_schema_y_rls:
+      - 02-DB-Schema.md (diagramas, enums, índices)
+      - 03-RLS-Matrix.md (políticas, tablas, roles)
+      - ADRs/ADR-001-RLS-soft-delete.md
+    2_auth_y_guardas:
+      - 06-Frontend-UI.md (flujo de login, guards)
+      - 03-RLS-Matrix.md (gatekeeper email activo)
+    3_pwa_instalacion_y_precarga:
+      - 07-Offline-PWA.md (install-gate móvil, precarga, caches)
+    4_admin_supervisores:
+      - 04-API-RPC.md (CRUD supervisores, RPC soft delete)
+    5_expedientes_y_acciones:
+      - 04-API-RPC.md (expedientes, acciones, asignaciones)
+    6_importacion_xlsx:
+      - 05-Edge-Functions.md (import_monitoreo/vuelos, validaciones)
+    7_detalle_expediente:
+      - 06-Frontend-UI.md (tabs, filtros, mapa, export)
+    8_avance_monitoreo:
+      - 04-API-RPC.md (mutaciones avance, reglas replanteo/añadido)
+    9_vuelos_avance:
+      - 04-API-RPC.md (mutaciones marcado/volado)
+    10_planificar:
+      - 04-API-RPC.md (planificación diaria, asignaciones)
+    11_dashboard:
+      - 02-DB-Schema.md (vistas SQL)
+      - 06-Frontend-UI.md (widgets KPI)
+    12_exportaciones:
+      - 05-Edge-Functions.md (export XLSX)
+    13_seguridad_y_auditoria:
+      - 03-RLS-Matrix.md (verificación)
+      - 09-Runbook-Incidentes.md (casuística)
+    14_UAT:
+      - 10-UAT-Checklist.md (casos y resultados)
+    15_lanzamiento:
+      - 08-Deployment.md (dominio, backups, monitoreo)
+
+variables_entorno:
+  vercel:
+    - NEXT_PUBLIC_SITE_URL
+    - NEXT_PUBLIC_SUPABASE_URL
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY
+    - NEXT_PUBLIC_REQUIRE_INSTALL  # MOBILE_ONLY
+    - NEXT_PUBLIC_MAP_STYLE_URL    # opcional
+    - SUPABASE_SERVICE_ROLE        # solo server/edge
+    - SUPABASE_ACCESS_TOKEN        # opcional CI
+    - SUPABASE_PROJECT_REF         # opcional CI
+  supabase_auth_redirects:
+    site_url: ${NEXT_PUBLIC_SITE_URL}
+    additional_redirect_urls:
+      - ${NEXT_PUBLIC_SITE_URL}/auth/callback
+      - http://localhost:3000/auth/callback
+
+entregables:
+  - 01_schema.sql
+  - 02_rls.sql
+  - 03_functions_and_triggers.sql
+  - 04_edge_functions/ (import/export + CORS)
+  - webapp/ (Next.js TS + Tailwind + shadcn + PWA + SSR supabase)
+  - docs/UAT-checklist.md
+  - docs/runbook-incidentes.md
+
+fases:
+  - nombre: 0_bootstrap_repo
+    objetivo: "Repositorio listo con toolchain y CI opcional"
+    pasos:
+      - "npx create-next-app@latest webapp --ts --eslint --tailwind --app --src-dir --import-alias @/*"
+      - "cd webapp && npx shadcn@latest init -y && npx shadcn@latest add button card input table dialog toast progress separator dropdown-menu"
+      - "Instalar deps: @supabase/ssr @supabase/supabase-js @ducanh2912/next-pwa dexie zod @tanstack/react-query @tanstack/react-table maplibre-gl"
+      - "Configurar Tailwind (content, theme shadcn) y globals.css"
+      - "Agregar next.config.mjs con next-pwa (solo production)"
+      - "public/manifest.json (display=standalone, start_url=/, icons, theme_color)"
+      - "Configurar rutas base: app/(public)/auth/callback/route.ts, app/(protected)/layout.tsx"
+      - "lib/supabase/{client,server}.ts con createBrowserClient y createServerClient"
+      - "Añadir lint/prettier/husky y scripts de verificación"
+    DoD:
+      - "Build local OK"
+      - "Preview en Vercel OK"
+
+  - nombre: 1_db_schema_y_rls
+    objetivo: "Base de datos lista con RLS y soft delete"
+    pasos:
+      - "Crear 01_schema.sql desde backend_spec (extensiones, enums, tablas, índices)"
+      - "Crear 02_rls.sql (políticas por tabla, gatekeeper por email activo)"
+      - "Crear 03_functions_and_triggers.sql (geom, replanteo, estatus, soft delete, RPC export/import)"
+      - "Aplicar migraciones en Supabase (CLI o editor SQL)"
+      - "Habilitar Auth Google + URLs de redirect"
+    pruebas:
+      - "Usuarios de prueba: admin@, lider@, supervisor@, monitor@"
+      - "Verificar: usuario no registrado → sin acceso; registrado → acceso limitado por expediente"
+      - "Intentar UPDATE columnas no permitidas bajo RLS (debe fallar)"
+    DoD:
+      - "Todas las tablas y políticas activas"
+      - "Edge Functions hello-world desplegada"
+
+  - nombre: 2_auth_y_guardas
+    objetivo: "Login Google via Supabase + guardas de acceso"
+    pasos:
+      - "Implementar botón de login con signInWithOAuth"
+      - "Callback SSR con @supabase/ssr; cookies seguras"
+      - "Layout protegido: si no hay sesión → redirect a /login"
+      - "Gatekeeper UI: si email no está en supervisores/is_active → pantalla de acceso denegado"
+    DoD:
+      - "Flujo de login/logout estable"
+      - "Sesión refresca sola con red"
+
+  - nombre: 3_pwa_instalacion_y_precarga
+    objetivo: "PWA lista; instalación obligatoria en móviles y precarga forzosa"
+    pasos:
+      - "Install gate: detectar móvil + standalone (bloquear si no instalada en iOS/Android)"
+      - "Pantalla de instalación (Android beforeinstallprompt; iOS instrucciones)"
+      - "Pantalla de precarga tras login: seleccionar expediente activo y fecha"
+      - "IndexedDB (Dexie): stores assignments_cache, points_cache, mutations_queue"
+      - "Indicador 'Listo para offline' y tamaño de cola"
+    DoD:
+      - "Modo offline abre y muestra datos precargados"
+      - "Mutaciones se encolan sin red"
+
+  - nombre: 4_admin_supervisores
+    objetivo: "CRUD de Supervisores (web)"
+    pasos:
+      - "Tabla + formulario (shadcn)"
+      - "Soft delete vía RPC"
+      - "Filtro por rol/estado"
+    DoD:
+      - "Crear/editar/borrar lógico funciona (RLS solo ADMIN)"
+
+  - nombre: 5_expedientes_y_acciones
+    objetivo: "CRUD de Expedientes + Acciones; asignar personal"
+    pasos:
+      - "Crear expediente (ADMIN) y acciones (1–2 con fechas)"
+      - "Asignar supervisores (expediente_supervisores)"
+      - "Listado de expedientes (más reciente arriba)"
+    DoD:
+      - "Usuarios ven solo expedientes asignados"
+
+  - nombre: 6_importacion_xlsx
+    objetivo: "Importar Monitoreo y Vuelo (ADMIN)"
+    pasos:
+      - "UI de carga → subir a Storage/uploads"
+      - "Llamar Edge Function import_monitoreo_from_xlsx (validación columnas exactas)"
+      - "Llamar Edge Function import_vuelos_from_xlsx"
+      - "Resumen de importación (inserted/updated/skipped/errors)"
+    DoD:
+      - "Upsert por claves únicas; auditoría guardada"
+
+  - nombre: 7_detalle_expediente
+    objetivo: "Vista principal de trabajo"
+    pasos:
+      - "Cabecera: nombre, código de expediente, acciones"
+      - "Tabs: Monitoreo | Vuelos | Planificar | Dashboard"
+      - "Tabla (TanStack Table) con filtros por locación/estatus"
+      - "Mapa (MapLibre) opcional con cod_colectora"
+      - "Exportar XLSX (RPC/Edge Function)"
+    DoD:
+      - "Lista y filtros eficientes"
+
+  - nombre: 8_avance_monitoreo
+    objetivo: "Actualizar estados + replanteo/añadido"
+    pasos:
+      - "UI de marcado/monitoreado con estados PENDIENTE/HECHO/DESCARTADO"
+      - "Motivo obligatorio si DESCARTADO"
+      - "Replanteo: formulario crea nuevo punto (tipo_origen=REPLANTEO) y descarta el original"
+      - "Añadido: formulario crea nuevo punto (tipo_origen=ANADIDO)"
+      - "Captura coords del dispositivo (opcional)"
+      - "Autoasignar monitoreado_accion_id por fecha si no viene"
+      - "Cola offline para estas mutaciones"
+    DoD:
+      - "Triggers actualizan estatus"
+      - "RLS permite solo columnas de avance"
+
+  - nombre: 9_vuelos_avance
+    objetivo: "Actualizar marcado/volado"
+    pasos:
+      - "Estados y motivos; captura opcional de coords"
+      - "Cola offline"
+    DoD:
+      - "RLS respeta permisos"
+
+  - nombre: 10_planificar
+    objetivo: "Frentes por día + miembros + asignaciones"
+    pasos:
+      - "Crear plan por fecha; accion_id propuesto por rango"
+      - "Añadir miembros (roles)"
+      - "Asignar LOCACION o puntos/ítems y actividad (MARCAR/MONITOREAR/VOLAR)"
+      - "Duplicar día anterior"
+    DoD:
+      - "Dashboard puede leer asignado vs realizado"
+
+  - nombre: 11_dashboard
+    objetivo: "% completitud global y por frente/locación"
+    pasos:
+      - "Crear vistas SQL v_resumen_expediente, v_resumen_por_locacion, v_resumen_planificacion"
+      - "Widgets: tarjetas KPI + tablas + barras"
+    DoD:
+      - "KPIs correctos en dataset de prueba"
+
+  - nombre: 12_exportaciones
+    objetivo: "Descargas filtradas por expediente"
+    pasos:
+      - "RPC export_monitoreo / export_vuelos → XLSX"
+      - "Selector de columnas (opcional)"
+    DoD:
+      - "Archivo abre en Excel con encabezados correctos"
+
+  - nombre: 13_seguridad_y_auditoria
+    objetivo: "Revisión de RLS, soft delete, logs"
+    pasos:
+      - "Intentos de bypass (SQL, REST) con usuarios de roles distintos"
+      - "Verificar que ADMIN ve is_deleted=true y otros no"
+      - "Edge Functions con CORS estricto"
+    DoD:
+      - "Checklist RLS aprobado"
+
+  - nombre: 14_UAT
+    objetivo: "Validación funcional con usuarios OEFA"
+    pasos:
+      - "Guion de pruebas en docs/UAT-checklist.md"
+      - "Casos: importaciones reales, replanteo, precarga offline, sincronización, exportación"
+    DoD:
+      - "Observaciones resueltas"
+
+  - nombre: 15_lanzamiento
+    objetivo: "Puesta en producción estable"
+    pasos:
+      - "Configurar dominio final en Vercel"
+      - "Backup inicial de BD"
+      - "Activar logging/error monitoring"
+      - "Entrenamiento breve a usuarios"
+    DoD:
+      - "Go-live comunicado"
+
+checklists:
+  PR:
+    - "Build y lint pasan"
+    - "CI bloquea cualquier cambio en /specs_app.yaml (archivo inmutable)"
+    - "Cambios en SQL versionados"
+    - "RLS evaluada (si aplica)"
+    - "Screenshot/video del cambio"
+    - "**Docs actualizadas en /docs y linkeadas en la descripción del PR (SS&T Gate)**"
+  DoD_feature:
+    - "Pruebas manuales en web y móvil"
+    - "Carga/guardado offline si aplica"
+    - "Logs y errores verificados"
+    - "**Documentación de la característica actualizada en /docs (capítulos correspondientes + Changelog)**"
+
+pruebas:
+  tipos:
+    - "unitarias (utilidades, hooks)"
+    - "integración ligera (acción → RPC → BD)"
+    - "e2e crítico (login, precarga, avance, export)"
+  navegadores:
+    - chrome_android
+    - safari_ios
+    - chrome_desktop
+    - safari_mac
+
+rendimiento:
+  presupuestos:
+    - "First load < 200KB JS (aprox, sin mapas)"
+    - "Precarga expediente < 30s en 3G rápida"
+  medidas:
+    - "code-splitting, lazy para mapa"
+
+riesgos:
+  - "Conectividad intermitente: mitigar con precarga clara y cola de mutaciones"
+  - "Errores de Excel: validar columnas estrictamente, feedback por fila"
+  - "Conflictos de edición: resolver con last-write-wins y auditoría"
+
+runbooks:
+  incidentes:
+    - "Fallo de login Google: revisar Auth redirect URLs y reloj del dispositivo"
+    - "CORS en Edge Functions: verificar orígenes en headers"
+    - "RLS bloquea de más: revisar rol y asignación a expediente"
+  backup:
+    - "Dump semanal + snapshot antes de importaciones masivas"
+
+métricas_exito:
+  - "% de sesiones móviles con PWA instalada"
+  - "Tiempo medio de precarga"
+  - "% de sincronizaciones exitosas al primer intento"
+  - "% locaciones completas vs planificado"
+
+anexos:
+  comandos_utiles:
+    - "npx supabase gen types typescript --project-id <ref> > packages/types/db.ts"
+    - "supabase db push --project-ref $SUPABASE_PROJECT_REF"
+  estructuras_carpetas:
+    webapp:
+      - app/
+      - app/auth/callback/route.ts
+      - app/(protected)/expedientes/page.tsx
+      - lib/supabase/{client,server}.ts
+      - components/ui/* (shadcn)
+      - public/manifest.json
+      - next.config.mjs
+      - tailwind.config.ts

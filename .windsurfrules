@@ -1,0 +1,8 @@
+1) El archivo /specs_app.yaml es la única fuente de verdad. NUNCA lo modifiques.
+2) Sigue al pie de la letra /plan-desarrollo-lote-x-v0.1.yaml (fases, DoD y SS&T).
+3) Tech stack fijo: Next.js (TypeScript) + Tailwind + shadcn/ui + Supabase (RLS).
+4) PWA: en móviles instalación obligatoria (NEXT_PUBLIC_REQUIRE_INSTALL=MOBILE_ONLY). Desktop, opcional.
+5) No introduzcas dependencias fuera del spec. Si es necesario, propone un ADR.
+6) No generes código que omita RLS, triggers o soft delete definidos en el spec.
+7) Antes de crear UI, genera y verifica SQL (01/02/03) según el plan.
+8) Todos los PR deben actualizar /docs según la fase (SS&T Gate).
