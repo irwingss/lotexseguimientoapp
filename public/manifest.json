@@ -1,0 +1,28 @@
+{
+  "name": "OEFA - Seguimiento Lote X",
+  "short_name": "Lote X",
+  "description": "Seguimiento de actividades de supervisión ambiental - Lote X",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#059669",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "es-PE",
+  "scope": "/",
+  "prefer_related_applications": false
+}
