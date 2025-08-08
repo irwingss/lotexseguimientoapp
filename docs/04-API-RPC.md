@@ -1,0 +1,179 @@
+# API RPC Functions Documentation
+
+## Overview
+This document describes all RPC (Remote Procedure Call) functions implemented in Supabase for the OEFA Lote X application. All functions follow security policies and require proper authentication.
+
+## Security Model
+- **Authentication**: All RPC functions require valid JWT token
+- **Authorization**: Functions check user permissions via `is_admin()` and role-based access
+- **Audit Trail**: Critical operations are logged in `auditoria_eventos` table
+
+## Utility Functions
+
+### `f_default_accion_por_fecha(expediente_id, fecha)`
+**Purpose**: Returns default action ID for an expedition and date
+**Parameters**:
+- `expediente_id_param` (uuid): Expedition ID
+- `fecha_param` (date): Target date
+
+**Returns**: `uuid` - Action ID or NULL if none found
+**Security**: SECURITY DEFINER, STABLE
+**Usage**:
+```sql
+SELECT public.f_default_accion_por_fecha('123e4567-e89b-12d3-a456-426614174000', '2025-01-15');
+```
+
+### `f_auditar_evento(evento, detalle)`
+**Purpose**: Log audit events with current user context
+**Parameters**:
+- `evento_param` (text): Event description
+- `detalle_param` (jsonb, optional): Additional event details
+
+**Returns**: `uuid` - Audit event ID
+**Security**: SECURITY DEFINER
+**Usage**:
+```sql
+SELECT public.f_auditar_evento('USER_LOGIN', '{"ip": "192.168.1.1"}'::jsonb);
+```
+
+## Soft Delete Functions
+
+### `rpc_soft_delete_supervisor(id, geom4326, precision_m, reason)`
+**Purpose**: Soft delete supervisor (ADMIN only)
+**Parameters**:
+- `id_param` (uuid): Supervisor ID to delete
+- `geom4326_param` (geometry): Location where deletion occurred
+- `precision_m_param` (double precision): GPS precision in meters
+- `reason_param` (text): Deletion reason
+
+**Returns**: `jsonb` with success status and message
+**Security**: ADMIN only
+**Usage**:
+```sql
+SELECT public.rpc_soft_delete_supervisor(
+  '123e4567-e89b-12d3-a456-426614174000',
+  ST_SetSRID(ST_MakePoint(-77.0428, -12.0464), 4326),
+  5.0,
+  'Usuario inactivo'
+);
+```
+
+### `rpc_restore_supervisor(id)`
+**Purpose**: Restore soft-deleted supervisor (ADMIN only)
+**Parameters**:
+- `id_param` (uuid): Supervisor ID to restore
+
+**Returns**: `jsonb` with success status and message
+**Security**: ADMIN only
+
+### `rpc_soft_delete_expediente(id, geom4326, precision_m, reason)`
+**Purpose**: Soft delete expedition (ADMIN only)
+**Parameters**: Same as supervisor soft delete
+**Returns**: `jsonb` with success status and message
+**Security**: ADMIN only
+
+### `rpc_restore_expediente(id)`
+**Purpose**: Restore soft-deleted expedition (ADMIN only)
+**Security**: ADMIN only
+
+### `rpc_soft_delete_accion(id, geom4326, precision_m, reason)`
+**Purpose**: Soft delete action (ADMIN only)
+**Security**: ADMIN only
+
+### `rpc_restore_accion(id)`
+**Purpose**: Restore soft-deleted action (ADMIN only)
+**Security**: ADMIN only
+
+### `rpc_soft_delete_monitoreo_punto(id, geom4326, precision_m, reason)`
+**Purpose**: Soft delete monitoring point (ADMIN only)
+**Security**: ADMIN only
+
+### `rpc_restore_monitoreo_punto(id)`
+**Purpose**: Restore soft-deleted monitoring point (ADMIN only)
+**Security**: ADMIN only
+
+## Export Functions
+
+### `rpc_export_monitoreo(expediente_id)`
+**Purpose**: Export monitoring data for Excel generation
+**Parameters**:
+- `expediente_id_param` (uuid): Expedition ID to export
+
+**Returns**: Table with columns:
+- `locacion`, `cod_celda`, `cod_grilla`
+- `este`, `norte`, `prof`, `distancia`
+- `cod_punto_campo`, `cod_colectora`, `p_superpos`
+- `estado_avance`, `fecha_marcado`, `fecha_monitoreo`
+- `supervisor_marcado`, `supervisor_monitoreo`
+- `motivo_descarte`, `accion_codigo`
+
+**Security**: User must have access to expedition or be ADMIN
+**Usage**:
+```sql
+SELECT * FROM public.rpc_export_monitoreo('123e4567-e89b-12d3-a456-426614174000');
+```
+
+### `rpc_export_vuelos(expediente_id)`
+**Purpose**: Export flight data for Excel generation
+**Returns**: Table with flight-specific columns
+**Security**: Same as monitoring export
+
+### `rpc_get_expediente_summary(expediente_id)`
+**Purpose**: Get expedition summary for dashboard
+**Returns**: `jsonb` with:
+- Expedition details
+- Monitoring statistics (total, pending, completed, discarded, completion %)
+- Flight statistics
+- Overall completion metrics
+
+**Usage**:
+```sql
+SELECT public.rpc_get_expediente_summary('123e4567-e89b-12d3-a456-426614174000');
+```
+
+## Response Formats
+
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Operation completed successfully",
+  "affected_rows": 1
+}
+```
+
+### Error Response
+```json
+{
+  "success": false,
+  "message": "Error description",
+  "affected_rows": 0
+}
+```
+
+## Error Handling
+- **Authentication Errors**: "Usuario no autorizado"
+- **Permission Errors**: "Solo usuarios ADMIN pueden..."
+- **Not Found Errors**: "Registro no encontrado o ya eliminado"
+- **Validation Errors**: Specific field validation messages
+
+## Audit Trail
+All critical operations are automatically logged with:
+- Actor (supervisor ID from JWT)
+- Timestamp
+- IP address
+- User agent
+- Operation details (JSONB)
+
+## Testing
+Use the following test queries to verify RPC functions:
+```sql
+-- Test audit function
+SELECT public.f_auditar_evento('TEST_EVENT', '{"test": true}'::jsonb);
+
+-- Test export function (replace with valid expedition ID)
+SELECT COUNT(*) FROM public.rpc_export_monitoreo('your-expedition-id');
+
+-- Test summary function
+SELECT public.rpc_get_expediente_summary('your-expedition-id');
+```

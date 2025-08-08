@@ -71,8 +71,59 @@
 
 ---
 
-## Next Phase: Phase 2 - RPC Functions and Edge Functions
-- RPC functions for business logic
-- Edge Functions for Excel import/export
-- API endpoint documentation
-- Testing framework setup
+## [Phase 2] - 2025-08-08 - 🚧 IN PROGRESS
+
+### 🎯 **Objective**: RPC Functions and Edge Functions Implementation
+
+### ✅ **Completed**
+- **RPC Functions Implemented** (13 functions):
+  - **Utility Functions**: `f_default_accion_por_fecha()`, `f_auditar_evento()`, `f_update_estatus_punto()`
+  - **Soft Delete Functions**: Complete CRUD with restore capabilities for all domain entities
+  - **Export Functions**: `rpc_export_monitoreo()`, `rpc_export_vuelos()`, `rpc_get_expediente_summary()`
+  
+- **Edge Functions Deployed** (2 functions):
+  - **`import-monitoreo-from-xlsx`**: Excel import for monitoring points with validation
+  - **`import-vuelos-from-xlsx`**: Excel import for flight items with type validation
+
+- **Dashboard Views Created** (3 views):
+  - **`v_resumen_expediente`**: Complete expedition statistics and completion percentages
+  - **`v_resumen_por_locacion`**: Location-based progress tracking
+  - **`v_resumen_planificacion`**: Planning vs execution metrics
+
+- **Documentation Created**:
+  - `04-API-RPC.md`: Complete RPC functions documentation with examples
+  - `05-Edge-Functions.md`: Edge Functions usage and deployment guide
+
+### 🔧 **Technical Implementation Details**
+
+#### **Security & Permissions**
+- All RPC functions implement proper ADMIN-only restrictions for critical operations
+- Soft delete functions require location tracking (`deleted_geom_4326`)
+- Export functions validate expedition access through RLS policies
+- Audit trail automatically captures user context from JWT
+
+#### **Excel Import Validation**
+- **Monitoring Points**: Validates 10 required columns, UTM coordinates, unique field codes
+- **Flight Items**: Validates flight types (PAF/PD), coordinates, unique codes
+- **Error Handling**: Detailed per-row error reporting with statistics
+
+#### **Database Migrations Applied**
+- `09_create_utility_rpc_functions` - Utility and audit functions
+- `10_create_soft_delete_rpc_functions` - Supervisor and expedition soft delete
+- `11_create_remaining_soft_delete_rpc_functions` - Action and monitoring point soft delete
+- `12_create_export_rpc_functions` - Export and summary functions
+- `13_create_dashboard_views` - Statistical views for reporting
+
+### 🎯 **Next Steps for Phase 2 Completion**
+- [ ] Deploy export Edge Functions (Excel generation)
+- [ ] Create comprehensive testing suite
+- [ ] Performance optimization and indexing review
+- [ ] Complete API documentation with examples
+
+---
+
+## Next Phase: Phase 3 - Authentication and Frontend UI
+- Google OAuth integration with Supabase
+- Next.js frontend with shadcn/ui components
+- PWA installation and offline capabilities
+- User interface for CRUD operations

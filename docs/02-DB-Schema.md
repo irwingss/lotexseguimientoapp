@@ -1,25 +1,38 @@
-# Database Schema Documentation
+# Database Schema - OEFA Lote X App
 
 ## Overview
-The database schema follows the specifications in `/specs_app.yaml` with PostgreSQL 15 + PostGIS extensions.
+Este documento describe el esquema de base de datos completo para la aplicación OEFA Lote X, incluyendo todas las tablas, enums, índices y relaciones. **Actualizado tras corrección exhaustiva según specs_app.yaml**.
 
-## Extensions Enabled
-- `postgis`: Spatial data support
-- `pgcrypto`: UUID generation with `gen_random_uuid()`
-- `citext`: Case-insensitive text for emails
+## Extensions
+- **postgis**: Para soporte de datos geoespaciales
+- **pgcrypto**: Para generación de UUIDs con `gen_random_uuid()`
+- **citext**: Para emails case-insensitive
 
-## Custom Types (Enums)
+## Enums
 ```sql
 -- Estados posibles de un expediente
 create type estado_expediente as enum ('ACTIVO', 'CERRADO', 'SUSPENDIDO');
 
 -- Roles de usuario en el sistema
-create type rol_supervisor as enum ('ADMIN', 'SUPERVISOR', 'CONSULTOR');
+create type rol_supervisor as enum ('ADMIN', 'SUPERVISOR_LIDER', 'SUPERVISOR', 'MONITOR');
 
 -- Estados de avance para monitoreo y vuelos
-create type estado_avance as enum ('PENDIENTE', 'HECHO', 'DESCARTADO');
+create type estado_avance as enum ('PENDIENTE', 'EN_PROGRESO', 'COMPLETADO', 'DESCARTADO');
 
--- Tipos de vuelo disponibles
+-- Estados de trabajo
+create type status_trabajo as enum ('PENDIENTE', 'HECHO', 'DESCARTADO');
+
+-- Estados de puntos
+create type punto_estatus as enum ('PENDIENTE', 'MARCADO', 'MONITOREADO', 'MARCADO_Y_MONITOREADO', 'DESCARTADO', 'REPLANTEADO', 'ANADIDO');
+
+-- Tipos de vuelo
+create type vuelo_tipo as enum ('PAF', 'PD');
+
+-- Objetivos de asignación
+create type asignacion_target as enum ('LOCACION', 'PUNTO_MONITOREO', 'VUELO_ITEM');
+
+-- Tipos de actividad
+create type actividad_tipo as enum ('MARCAR', 'MONITOREAR', 'VOLAR');
 create type tipo_vuelo as enum ('PUNTO', 'LINEA', 'AREA');
 ```
 
