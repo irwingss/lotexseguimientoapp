@@ -326,3 +326,283 @@ BEGIN
   ) rol_counts;
 END;
 $$;
+
+-- =============================================
+-- FUNCIÓN RPC: Bulk update marcado por locación
+-- =============================================
+
+CREATE OR REPLACE FUNCTION public.rpc_bulk_update_locacion_marcado(
+  p_expediente_id UUID,
+  p_locacion TEXT,
+  p_status status_trabajo,
+  p_motivo TEXT DEFAULT NULL,
+  p_only_unset BOOLEAN DEFAULT TRUE,
+  p_dry_run BOOLEAN DEFAULT FALSE
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  current_supervisor_id UUID;
+  total_puntos INTEGER;
+  puntos_afectados INTEGER;
+  result_json JSONB;
+BEGIN
+  -- Verificar que el usuario tiene permisos
+  IF NOT EXISTS (
+    SELECT 1 FROM public.supervisores 
+    WHERE email = auth.email()
+    AND is_active = true 
+    AND is_deleted = false
+  ) THEN
+    RAISE EXCEPTION 'Acceso denegado: usuario no autorizado';
+  END IF;
+
+  -- Obtener ID del supervisor actual
+  current_supervisor_id := public.get_current_supervisor_id();
+  
+  IF current_supervisor_id IS NULL THEN
+    RAISE EXCEPTION 'No se pudo identificar al supervisor actual';
+  END IF;
+
+  -- Validar parámetros
+  IF p_expediente_id IS NULL THEN
+    RAISE EXCEPTION 'expediente_id es requerido';
+  END IF;
+
+  IF p_locacion IS NULL OR trim(p_locacion) = '' THEN
+    RAISE EXCEPTION 'locacion es requerida';
+  END IF;
+
+  -- Si status es DESCARTADO, motivo es obligatorio
+  IF p_status = 'DESCARTADO' AND (p_motivo IS NULL OR trim(p_motivo) = '') THEN
+    RAISE EXCEPTION 'Motivo es obligatorio cuando status es DESCARTADO';
+  END IF;
+
+  -- Contar total de puntos en la locación
+  SELECT COUNT(*) INTO total_puntos
+  FROM public.monitoreo_puntos
+  WHERE expediente_id = p_expediente_id 
+    AND locacion = p_locacion 
+    AND is_deleted = false;
+
+  -- Contar puntos que serán afectados
+  IF p_only_unset THEN
+    SELECT COUNT(*) INTO puntos_afectados
+    FROM public.monitoreo_puntos
+    WHERE expediente_id = p_expediente_id 
+      AND locacion = p_locacion 
+      AND is_deleted = false
+      AND marcado_status = 'PENDIENTE';
+  ELSE
+    puntos_afectados := total_puntos;
+  END IF;
+
+  -- Si es dry_run, solo retornar conteos
+  IF p_dry_run THEN
+    RETURN jsonb_build_object(
+      'dry_run', true,
+      'total_puntos', total_puntos,
+      'puntos_afectados', puntos_afectados,
+      'expediente_id', p_expediente_id,
+      'locacion', p_locacion,
+      'nuevo_status', p_status,
+      'motivo', p_motivo
+    );
+  END IF;
+
+  -- Realizar la actualización masiva
+  IF p_only_unset THEN
+    UPDATE public.monitoreo_puntos SET
+      marcado_status = p_status,
+      marcado_motivo = CASE WHEN p_status = 'DESCARTADO' THEN p_motivo ELSE NULL END,
+      marcado_at = CASE WHEN p_status = 'HECHO' THEN now() ELSE marcado_at END,
+      updated_at = now()
+    WHERE expediente_id = p_expediente_id 
+      AND locacion = p_locacion 
+      AND is_deleted = false
+      AND marcado_status = 'PENDIENTE';
+  ELSE
+    UPDATE public.monitoreo_puntos SET
+      marcado_status = p_status,
+      marcado_motivo = CASE WHEN p_status = 'DESCARTADO' THEN p_motivo ELSE NULL END,
+      marcado_at = CASE WHEN p_status = 'HECHO' THEN now() ELSE marcado_at END,
+      updated_at = now()
+    WHERE expediente_id = p_expediente_id 
+      AND locacion = p_locacion 
+      AND is_deleted = false;
+  END IF;
+
+  GET DIAGNOSTICS puntos_afectados = ROW_COUNT;
+
+  -- Auditar la operación
+  PERFORM public.f_auditar_evento('BULK_UPDATE_MARCADO', jsonb_build_object(
+    'expediente_id', p_expediente_id,
+    'locacion', p_locacion,
+    'status', p_status,
+    'motivo', p_motivo,
+    'only_unset', p_only_unset,
+    'puntos_afectados', puntos_afectados,
+    'supervisor_id', current_supervisor_id
+  ));
+
+  -- Retornar resultado
+  RETURN jsonb_build_object(
+    'success', true,
+    'total_puntos', total_puntos,
+    'puntos_afectados', puntos_afectados,
+    'expediente_id', p_expediente_id,
+    'locacion', p_locacion,
+    'nuevo_status', p_status,
+    'motivo', p_motivo
+  );
+END;
+$$;
+
+-- =============================================
+-- FUNCIÓN RPC: Bulk update monitoreo por locación
+-- =============================================
+
+CREATE OR REPLACE FUNCTION public.rpc_bulk_update_locacion_monitoreo(
+  p_expediente_id UUID,
+  p_locacion TEXT,
+  p_status status_trabajo,
+  p_accion_id UUID DEFAULT NULL,
+  p_motivo TEXT DEFAULT NULL,
+  p_only_unset BOOLEAN DEFAULT TRUE,
+  p_dry_run BOOLEAN DEFAULT FALSE
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  current_supervisor_id UUID;
+  total_puntos INTEGER;
+  puntos_afectados INTEGER;
+  auto_accion_id UUID;
+  result_json JSONB;
+BEGIN
+  -- Verificar que el usuario tiene permisos
+  IF NOT EXISTS (
+    SELECT 1 FROM public.supervisores 
+    WHERE email = auth.email()
+    AND is_active = true 
+    AND is_deleted = false
+  ) THEN
+    RAISE EXCEPTION 'Acceso denegado: usuario no autorizado';
+  END IF;
+
+  -- Obtener ID del supervisor actual
+  current_supervisor_id := public.get_current_supervisor_id();
+  
+  IF current_supervisor_id IS NULL THEN
+    RAISE EXCEPTION 'No se pudo identificar al supervisor actual';
+  END IF;
+
+  -- Validar parámetros
+  IF p_expediente_id IS NULL THEN
+    RAISE EXCEPTION 'expediente_id es requerido';
+  END IF;
+
+  IF p_locacion IS NULL OR trim(p_locacion) = '' THEN
+    RAISE EXCEPTION 'locacion es requerida';
+  END IF;
+
+  -- Si status es DESCARTADO, motivo es obligatorio
+  IF p_status = 'DESCARTADO' AND (p_motivo IS NULL OR trim(p_motivo) = '') THEN
+    RAISE EXCEPTION 'Motivo es obligatorio cuando status es DESCARTADO';
+  END IF;
+
+  -- Si status es HECHO y no hay accion_id, auto-asignar por fecha
+  IF p_status = 'HECHO' AND p_accion_id IS NULL THEN
+    auto_accion_id := public.f_default_accion_por_fecha(p_expediente_id, CURRENT_DATE);
+  ELSE
+    auto_accion_id := p_accion_id;
+  END IF;
+
+  -- Contar total de puntos en la locación
+  SELECT COUNT(*) INTO total_puntos
+  FROM public.monitoreo_puntos
+  WHERE expediente_id = p_expediente_id 
+    AND locacion = p_locacion 
+    AND is_deleted = false;
+
+  -- Contar puntos que serán afectados
+  IF p_only_unset THEN
+    SELECT COUNT(*) INTO puntos_afectados
+    FROM public.monitoreo_puntos
+    WHERE expediente_id = p_expediente_id 
+      AND locacion = p_locacion 
+      AND is_deleted = false
+      AND monitoreado_status = 'PENDIENTE';
+  ELSE
+    puntos_afectados := total_puntos;
+  END IF;
+
+  -- Si es dry_run, solo retornar conteos
+  IF p_dry_run THEN
+    RETURN jsonb_build_object(
+      'dry_run', true,
+      'total_puntos', total_puntos,
+      'puntos_afectados', puntos_afectados,
+      'expediente_id', p_expediente_id,
+      'locacion', p_locacion,
+      'nuevo_status', p_status,
+      'accion_id', auto_accion_id,
+      'motivo', p_motivo
+    );
+  END IF;
+
+  -- Realizar la actualización masiva
+  IF p_only_unset THEN
+    UPDATE public.monitoreo_puntos SET
+      monitoreado_status = p_status,
+      monitoreado_accion_id = CASE WHEN p_status = 'HECHO' THEN auto_accion_id ELSE monitoreado_accion_id END,
+      monitoreado_motivo = CASE WHEN p_status = 'DESCARTADO' THEN p_motivo ELSE NULL END,
+      monitoreado_at = CASE WHEN p_status = 'HECHO' THEN now() ELSE monitoreado_at END,
+      updated_at = now()
+    WHERE expediente_id = p_expediente_id 
+      AND locacion = p_locacion 
+      AND is_deleted = false
+      AND monitoreado_status = 'PENDIENTE';
+  ELSE
+    UPDATE public.monitoreo_puntos SET
+      monitoreado_status = p_status,
+      monitoreado_accion_id = CASE WHEN p_status = 'HECHO' THEN auto_accion_id ELSE monitoreado_accion_id END,
+      monitoreado_motivo = CASE WHEN p_status = 'DESCARTADO' THEN p_motivo ELSE NULL END,
+      monitoreado_at = CASE WHEN p_status = 'HECHO' THEN now() ELSE monitoreado_at END,
+      updated_at = now()
+    WHERE expediente_id = p_expediente_id 
+      AND locacion = p_locacion 
+      AND is_deleted = false;
+  END IF;
+
+  GET DIAGNOSTICS puntos_afectados = ROW_COUNT;
+
+  -- Auditar la operación
+  PERFORM public.f_auditar_evento('BULK_UPDATE_MONITOREO', jsonb_build_object(
+    'expediente_id', p_expediente_id,
+    'locacion', p_locacion,
+    'status', p_status,
+    'accion_id', auto_accion_id,
+    'motivo', p_motivo,
+    'only_unset', p_only_unset,
+    'puntos_afectados', puntos_afectados,
+    'supervisor_id', current_supervisor_id
+  ));
+
+  -- Retornar resultado
+  RETURN jsonb_build_object(
+    'success', true,
+    'total_puntos', total_puntos,
+    'puntos_afectados', puntos_afectados,
+    'expediente_id', p_expediente_id,
+    'locacion', p_locacion,
+    'nuevo_status', p_status,
+    'accion_id', auto_accion_id,
+    'motivo', p_motivo
+  );
+END;
+$$;

@@ -23,6 +23,13 @@
   - `f_populate_geometry()`: Auto-populates spatial fields
   - `utm_to_wgs84()`: Coordinate conversion utility
 
+- **Critical Bulk Operations (RPC Functions)**:
+  - `rpc_bulk_update_locacion_marcado()`: Mass update marking status by location
+  - `rpc_bulk_update_locacion_monitoreo()`: Mass update monitoring status by location
+  - `rpc_crear_replanteo()`: Create replanting points with justification
+  - `rpc_crear_anadido()`: Create additional points with justification
+  - All bulk functions include dry-run mode and comprehensive audit logging
+
 - **Performance Optimizations**:
   - Strategic indexes on frequently queried fields
   - Spatial indexes (GIST) on geometry columns

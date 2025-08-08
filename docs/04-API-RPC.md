@@ -131,6 +131,106 @@ SELECT * FROM public.rpc_export_monitoreo('123e4567-e89b-12d3-a456-426614174000'
 SELECT public.rpc_get_expediente_summary('123e4567-e89b-12d3-a456-426614174000');
 ```
 
+## Bulk Operations (Critical Functions)
+
+### `rpc_bulk_update_locacion_marcado(expediente_id, locacion, status, motivo?, only_unset?, dry_run?)`
+**Purpose**: Mass update marking status for all points in a location
+**Parameters**:
+- `p_expediente_id` (uuid): Expedition ID
+- `p_locacion` (text): Location name
+- `p_status` (status_trabajo): New status (PENDIENTE, HECHO, DESCARTADO)
+- `p_motivo` (text, optional): Required if status is DESCARTADO
+- `p_only_unset` (boolean, default true): Only update PENDIENTE points
+- `p_dry_run` (boolean, default false): Preview changes without applying
+
+**Returns**: `jsonb` with operation results and affected point counts
+**Security**: Requires active supervisor authentication
+**Usage**:
+```sql
+-- Preview bulk marking as HECHO
+SELECT public.rpc_bulk_update_locacion_marcado(
+  '123e4567-e89b-12d3-a456-426614174000',
+  'SECTOR_A',
+  'HECHO'::status_trabajo,
+  NULL,
+  true,
+  true
+);
+
+-- Apply bulk discard with reason
+SELECT public.rpc_bulk_update_locacion_marcado(
+  '123e4567-e89b-12d3-a456-426614174000',
+  'SECTOR_A',
+  'DESCARTADO'::status_trabajo,
+  'Zona inaccesible por condiciones climáticas'
+);
+```
+
+### `rpc_bulk_update_locacion_monitoreo(expediente_id, locacion, status, accion_id?, motivo?, only_unset?, dry_run?)`
+**Purpose**: Mass update monitoring status for all points in a location
+**Parameters**:
+- `p_expediente_id` (uuid): Expedition ID
+- `p_locacion` (text): Location name
+- `p_status` (status_trabajo): New status (PENDIENTE, HECHO, DESCARTADO)
+- `p_accion_id` (uuid, optional): Action ID (auto-assigned if NULL and status=HECHO)
+- `p_motivo` (text, optional): Required if status is DESCARTADO
+- `p_only_unset` (boolean, default true): Only update PENDIENTE points
+- `p_dry_run` (boolean, default false): Preview changes without applying
+
+**Returns**: `jsonb` with operation results and affected point counts
+**Security**: Requires active supervisor authentication
+**Usage**:
+```sql
+-- Bulk monitoring completion with auto action assignment
+SELECT public.rpc_bulk_update_locacion_monitoreo(
+  '123e4567-e89b-12d3-a456-426614174000',
+  'SECTOR_B',
+  'HECHO'::status_trabajo
+);
+```
+
+### `rpc_crear_replanteo(expediente_id, locacion, motivo, puntos_nuevos, dry_run?)`
+**Purpose**: Create replanting points with justification
+**Parameters**:
+- `p_expediente_id` (uuid): Expedition ID
+- `p_locacion` (text): Location name
+- `p_motivo` (text): Replanting justification (required)
+- `p_puntos_nuevos` (jsonb): Array of new points with geometry
+- `p_dry_run` (boolean, default false): Preview without inserting
+
+**Returns**: `jsonb` with insertion results and point counts
+**Security**: Requires active supervisor authentication
+**Usage**:
+```sql
+SELECT public.rpc_crear_replanteo(
+  '123e4567-e89b-12d3-a456-426614174000',
+  'SECTOR_C',
+  'Replanteo por obstáculos no identificados en planificación inicial',
+  '[{"punto_numero": 101, "geom_4326": {"type": "Point", "coordinates": [-75.123, -12.456]}}]'::jsonb
+);
+```
+
+### `rpc_crear_anadido(expediente_id, locacion, motivo, puntos_nuevos, dry_run?)`
+**Purpose**: Create additional points with justification
+**Parameters**:
+- `p_expediente_id` (uuid): Expedition ID
+- `p_locacion` (text): Location name
+- `p_motivo` (text): Addition justification (required)
+- `p_puntos_nuevos` (jsonb): Array of new points with geometry
+- `p_dry_run` (boolean, default false): Preview without inserting
+
+**Returns**: `jsonb` with insertion results and point counts
+**Security**: Requires active supervisor authentication
+**Usage**:
+```sql
+SELECT public.rpc_crear_anadido(
+  '123e4567-e89b-12d3-a456-426614174000',
+  'SECTOR_D',
+  'Puntos adicionales por requerimiento técnico de mayor densidad',
+  '[{"punto_numero": 201, "geom_4326": {"type": "Point", "coordinates": [-75.789, -12.123]}}]'::jsonb
+);
+```
+
 ## Response Formats
 
 ### Success Response
@@ -139,6 +239,18 @@ SELECT public.rpc_get_expediente_summary('123e4567-e89b-12d3-a456-426614174000')
   "success": true,
   "message": "Operation completed successfully",
   "affected_rows": 1
+}
+```
+
+### Bulk Operation Response
+```json
+{
+  "success": true,
+  "total_puntos": 150,
+  "puntos_afectados": 45,
+  "expediente_id": "123e4567-e89b-12d3-a456-426614174000",
+  "locacion": "SECTOR_A",
+  "nuevo_status": "HECHO"
 }
 ```
 
