@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, Calendar } from 'lucide-react'
-import { toast } from 'sonner'
+// import { toast } from 'sonner' // Removed for now
 
 interface Accion {
   id?: string
@@ -58,7 +58,10 @@ export function EditExpedienteDialog({
   })
   const [acciones, setAcciones] = useState<Accion[]>([])
 
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   useEffect(() => {
     if (expediente && open) {
@@ -91,7 +94,7 @@ export function EditExpedienteDialog({
 
   const addAccion = () => {
     if (acciones.length >= 2) {
-      toast.error('Máximo 2 acciones por expediente')
+      console.error('Máximo 2 acciones por expediente')
       return
     }
     
@@ -104,7 +107,7 @@ export function EditExpedienteDialog({
 
   const removeAccion = async (index: number) => {
     if (acciones.length === 1) {
-      toast.error('Debe haber al menos una acción')
+      console.error('Debe haber al menos una acción')
       return
     }
 
@@ -120,12 +123,12 @@ export function EditExpedienteDialog({
 
         if (error) {
           console.error('Error deleting accion:', error)
-          toast.error('Error al eliminar acción')
+          console.error('Error al eliminar acción')
           return
         }
       } catch (error) {
         console.error('Error:', error)
-        toast.error('Error al eliminar acción')
+        console.error('Error al eliminar acción')
         return
       }
     }
@@ -141,12 +144,12 @@ export function EditExpedienteDialog({
 
   const validateForm = () => {
     if (!formData.expediente_codigo.trim()) {
-      toast.error('El código del expediente es obligatorio')
+      console.error('El código del expediente es obligatorio')
       return false
     }
 
     if (!formData.nombre.trim()) {
-      toast.error('El nombre del expediente es obligatorio')
+      console.error('El nombre del expediente es obligatorio')
       return false
     }
 
@@ -155,22 +158,22 @@ export function EditExpedienteDialog({
       const accion = acciones[i]
       
       if (!accion.codigo_accion.trim()) {
-        toast.error(`El código de la acción ${i + 1} es obligatorio`)
+        console.error(`El código de la acción ${i + 1} es obligatorio`)
         return false
       }
 
       if (!accion.fecha_inicio) {
-        toast.error(`La fecha de inicio de la acción ${i + 1} es obligatoria`)
+        console.error(`La fecha de inicio de la acción ${i + 1} es obligatoria`)
         return false
       }
 
       if (!accion.fecha_fin) {
-        toast.error(`La fecha de fin de la acción ${i + 1} es obligatoria`)
+        console.error(`La fecha de fin de la acción ${i + 1} es obligatoria`)
         return false
       }
 
       if (new Date(accion.fecha_inicio) > new Date(accion.fecha_fin)) {
-        toast.error(`La fecha de inicio debe ser anterior a la fecha de fin en la acción ${i + 1}`)
+        console.error(`La fecha de inicio debe ser anterior a la fecha de fin en la acción ${i + 1}`)
         return false
       }
     }
@@ -198,7 +201,7 @@ export function EditExpedienteDialog({
 
       if (expedienteError) {
         console.error('Error updating expediente:', expedienteError)
-        toast.error('Error al actualizar expediente')
+        console.error('Error al actualizar expediente')
         return
       }
 
@@ -217,7 +220,7 @@ export function EditExpedienteDialog({
 
           if (error) {
             console.error('Error updating accion:', error)
-            toast.error('Error al actualizar acción')
+            console.error('Error al actualizar acción')
             return
           }
         } else {
@@ -233,7 +236,7 @@ export function EditExpedienteDialog({
 
           if (error) {
             console.error('Error creating accion:', error)
-            toast.error('Error al crear acción')
+            console.error('Error al crear acción')
             return
           }
         }
@@ -243,7 +246,7 @@ export function EditExpedienteDialog({
       handleClose()
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al actualizar expediente')
+      console.error('Error al actualizar expediente')
     } finally {
       setLoading(false)
     }

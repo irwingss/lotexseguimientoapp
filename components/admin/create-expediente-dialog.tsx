@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, Calendar } from 'lucide-react'
-import { toast } from 'sonner'
+// import { toast } from 'sonner' // Removed for now
 
 interface Accion {
   codigo_accion: string
@@ -49,7 +49,10 @@ export function CreateExpedienteDialog({
     }
   ])
 
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   const resetForm = () => {
     setFormData({
@@ -69,8 +72,16 @@ export function CreateExpedienteDialog({
   }
 
   const addAccion = () => {
-    if (acciones.length >= 2) {
-      toast.error('Máximo 2 acciones por expediente')
+    if (acciones.length > 2) {
+      console.error('Máximo 2 acciones por expediente')
+      return
+    }
+    
+    const duplicateCodes = acciones.filter((a, index, arr) => 
+      arr.findIndex(b => b.codigo_accion === a.codigo_accion) !== index
+    )
+    if (duplicateCodes.length > 0) {
+      console.error('No puede haber códigos de acción duplicados')
       return
     }
     
@@ -83,7 +94,7 @@ export function CreateExpedienteDialog({
 
   const removeAccion = (index: number) => {
     if (acciones.length === 1) {
-      toast.error('Debe haber al menos una acción')
+      console.error('Debe haber al menos una acción')
       return
     }
     
@@ -98,12 +109,12 @@ export function CreateExpedienteDialog({
 
   const validateForm = () => {
     if (!formData.expediente_codigo.trim()) {
-      toast.error('El código del expediente es obligatorio')
+      console.error('El código del expediente es obligatorio')
       return false
     }
 
     if (!formData.nombre.trim()) {
-      toast.error('El nombre del expediente es obligatorio')
+      console.error('El nombre del expediente es obligatorio')
       return false
     }
 
@@ -112,22 +123,22 @@ export function CreateExpedienteDialog({
       const accion = acciones[i]
       
       if (!accion.codigo_accion.trim()) {
-        toast.error(`El código de la acción ${i + 1} es obligatorio`)
+        console.error(`El código de la acción ${i + 1} es obligatorio`)
         return false
       }
 
       if (!accion.fecha_inicio) {
-        toast.error(`La fecha de inicio de la acción ${i + 1} es obligatoria`)
+        console.error(`La fecha de inicio de la acción ${i + 1} es obligatoria`)
         return false
       }
 
       if (!accion.fecha_fin) {
-        toast.error(`La fecha de fin de la acción ${i + 1} es obligatoria`)
+        console.error(`La fecha de fin de la acción ${i + 1} es obligatoria`)
         return false
       }
 
       if (new Date(accion.fecha_inicio) > new Date(accion.fecha_fin)) {
-        toast.error(`La fecha de inicio debe ser anterior a la fecha de fin en la acción ${i + 1}`)
+        console.error(`La fecha de inicio debe ser anterior a la fecha de fin en la acción ${i + 1}`)
         return false
       }
     }
@@ -155,7 +166,7 @@ export function CreateExpedienteDialog({
 
       if (expedienteError) {
         console.error('Error creating expediente:', expedienteError)
-        toast.error('Error al crear expediente')
+        console.error('Error al crear el expediente')
         return
       }
 
@@ -173,7 +184,7 @@ export function CreateExpedienteDialog({
 
       if (accionesError) {
         console.error('Error creating acciones:', accionesError)
-        toast.error('Error al crear acciones')
+        console.error('Error al crear las acciones')
         return
       }
 
@@ -181,7 +192,7 @@ export function CreateExpedienteDialog({
       handleClose()
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al crear expediente')
+      console.error('Error al crear el expediente')
     } finally {
       setLoading(false)
     }

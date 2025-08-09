@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation'
-
+// This file is overridden by (protected)/page.tsx
+// Next.js App Router will serve (protected)/page.tsx for the root route
 export default function Home() {
-  // Redirect to protected dashboard
-  redirect('/')
+  return null
 }

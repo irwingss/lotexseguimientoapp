@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ import {
   SelectValue 
 } from '@/components/ui/select'
 import { Users, Search, UserCheck, UserX } from 'lucide-react'
-import { toast } from 'sonner'
+// import { toast } from 'sonner' // Removed for now
 
 interface Supervisor {
   id: string
@@ -68,7 +68,10 @@ export function AssignSupervisoresDialog({
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
 
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   useEffect(() => {
     if (open) {
@@ -108,14 +111,14 @@ export function AssignSupervisoresDialog({
 
       if (error) {
         console.error('Error fetching supervisores:', error)
-        toast.error('Error al cargar supervisores')
+        console.error('Error al cargar supervisores')
         return
       }
 
       setSupervisores(data || [])
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al cargar supervisores')
+      console.error('Error al cargar supervisores')
     }
   }
 
@@ -155,7 +158,7 @@ export function AssignSupervisoresDialog({
 
         if (deleteError) {
           console.error('Error removing assignments:', deleteError)
-          toast.error('Error al remover asignaciones')
+          console.error('Error al remover asignaciones')
           return
         }
       }
@@ -174,7 +177,7 @@ export function AssignSupervisoresDialog({
 
         if (insertError) {
           console.error('Error adding assignments:', insertError)
-          toast.error('Error al agregar asignaciones')
+          console.error('Error al agregar asignaciones')
           return
         }
       }
@@ -197,17 +200,17 @@ export function AssignSupervisoresDialog({
 
         if (reactivateError) {
           console.error('Error reactivating assignments:', reactivateError)
-          toast.error('Error al reactivar asignaciones')
+          console.error('Error al reactivar asignaciones')
           return
         }
       }
 
       onAssignmentUpdated()
       onOpenChange(false)
-      toast.success('Asignaciones actualizadas exitosamente')
+      console.log('Asignaciones actualizadas exitosamente')
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al actualizar asignaciones')
+      console.error('Error al actualizar asignaciones')
     } finally {
       setLoading(false)
     }
@@ -279,7 +282,7 @@ export function AssignSupervisoresDialog({
                       id="search"
                       placeholder="Buscar por nombre o email..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                       className="pl-10"
                     />
                   </div>
