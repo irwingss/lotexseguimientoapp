@@ -110,22 +110,34 @@ export async function POST(request: NextRequest) {
 
     console.log('[API] Excel file read successfully, rows:', jsonData.length);
 
-    // Validar columnas exactas
-    const headers = jsonData[0] as string[];
-    console.log('[API] Excel headers found:', headers);
+    // Normalizar headers a mayúsculas y crear mapeo
+    const originalHeaders = jsonData[0] as string[];
+    const normalizedHeaders = originalHeaders.map(h => h?.toString().trim().toUpperCase());
+    console.log('[API] Excel headers found:', originalHeaders);
+    console.log('[API] Normalized headers:', normalizedHeaders);
     
-    const missingColumns = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
-    const extraColumns = headers.filter(col => !REQUIRED_COLUMNS.includes(col));
+    // Crear mapeo de columnas requeridas a índices
+    const columnMapping: { [key: string]: number } = {};
+    const missingColumns: string[] = [];
+    
+    for (const requiredCol of REQUIRED_COLUMNS) {
+      const index = normalizedHeaders.indexOf(requiredCol);
+      if (index !== -1) {
+        columnMapping[requiredCol] = index;
+      } else {
+        missingColumns.push(requiredCol);
+      }
+    }
 
-    if (missingColumns.length > 0 || extraColumns.length > 0) {
-      console.log('[API] Column validation failed:', { missingColumns, extraColumns });
+    if (missingColumns.length > 0) {
+      console.log('[API] Column validation failed - missing columns:', missingColumns);
       return NextResponse.json({
         success: false,
-        message: `Column validation failed. Missing: [${missingColumns.join(', ')}], Extra: [${extraColumns.join(', ')}]. Required: [${REQUIRED_COLUMNS.join(', ')}]`
+        message: `Missing required columns: [${missingColumns.join(', ')}]. Found columns: [${originalHeaders.join(', ')}]. Required: [${REQUIRED_COLUMNS.join(', ')}]`
       }, { status: 400 });
     }
 
-    console.log('[API] Column validation passed');
+    console.log('[API] Column validation passed. Column mapping:', columnMapping);
 
     // Procesar filas de datos
     const dataRows = jsonData.slice(1) as any[][];
@@ -141,11 +153,11 @@ export async function POST(request: NextRequest) {
       const rowNum = i + 2; // +2 porque empezamos desde fila 1 (header) y el índice es 0-based
 
       try {
-        // Mapear datos de la fila
+        // Mapear datos de la fila usando el mapeo de columnas
         const rowData: any = {};
-        headers.forEach((header, index) => {
-          rowData[header] = row[index];
-        });
+        for (const [requiredCol, colIndex] of Object.entries(columnMapping)) {
+          rowData[requiredCol] = row[colIndex];
+        }
 
         // Validar datos obligatorios
         if (!rowData.COD_PUNTO_CAMPO || !rowData.ESTE || !rowData.NORTE) {

@@ -99,9 +99,32 @@ interface ImportResult {
 ## Validaciones Implementadas
 
 ### Columnas Excel
-- **Monitoreo**: Validación estricta de 10 columnas exactas
-- **Vuelos**: Validación estricta de 6 columnas exactas
-- **Error si faltan o sobran columnas**
+- **Monitoreo**: Validación flexible de 10 columnas requeridas
+  - Headers case-insensitive (mayúsculas, minúsculas o mixtas)
+  - Columnas adicionales son ignoradas automáticamente
+  - Solo se procesan las columnas requeridas: `LOCACION`, `COD_CELDA`, `COD_GRILLA`, `ESTE`, `NORTE`, `PROF`, `P_SUPERPOS`, `COD_PUNTO_CAMPO`, `COD_COLECTORA`, `DISTANCIA`
+- **Vuelos**: Validación flexible de 6 columnas requeridas
+  - Headers case-insensitive (mayúsculas, minúsculas o mixtas)
+  - Columnas adicionales son ignoradas automáticamente
+  - Solo se procesan las columnas requeridas: `ITEM`, `TIPO`, `CODIGO`, `ESTE`, `NORTE`, `BASE`
+
+### Ejemplos de Flexibilidad
+```
+✅ VÁLIDO - Headers en mayúsculas:
+LOCACION | COD_CELDA | COD_GRILLA | ESTE | NORTE | ...
+
+✅ VÁLIDO - Headers en minúsculas:
+locacion | cod_celda | cod_grilla | este | norte | ...
+
+✅ VÁLIDO - Headers mixtos:
+Locacion | Cod_Celda | COD_GRILLA | Este | Norte | ...
+
+✅ VÁLIDO - Con columnas extra (se ignoran):
+LOCACION | EXTRA_COL | COD_CELDA | OTRO_CAMPO | ESTE | ...
+
+❌ ERROR - Falta columna requerida:
+LOCACION | COD_CELDA | ESTE | NORTE | ... (falta COD_GRILLA)
+```
 
 ### Datos
 - **Coordenadas**: ESTE/NORTE deben ser numéricos válidos UTM17S
