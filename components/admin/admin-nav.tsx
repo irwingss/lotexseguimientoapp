@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Shield, Users, FileText, Settings, Home } from 'lucide-react'
+import { Shield, Users, FileText, Settings, Home, Upload } from 'lucide-react'
 
 const adminNavItems = [
   {
@@ -24,6 +24,12 @@ const adminNavItems = [
     href: '/admin/expedientes',
     icon: FileText,
     description: 'Administración de expedientes'
+  },
+  {
+    title: 'Importar XLSX',
+    href: '/admin/importar',
+    icon: Upload,
+    description: 'Importar datos de monitoreo y vuelos'
   },
   {
     title: 'Configuración',
