@@ -77,6 +77,33 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+        {/* Selección Global */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-1">
+              <CardTitle className="text-base font-medium">Selección Global</CardTitle>
+              <CardDescription>
+                Define el expediente visible para usuarios no-ADMIN
+              </CardDescription>
+            </div>
+            <BarChart3 className="h-8 w-8 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  Elegir expediente seleccionado globalmente
+                </p>
+              </div>
+              <Link href="/admin/seleccion">
+                <Button size="sm">
+                  Abrir
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Importación */}
         <Card className="hover:shadow-md transition-shadow opacity-60">
