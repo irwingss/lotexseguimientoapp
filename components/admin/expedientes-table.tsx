@@ -45,7 +45,8 @@ interface Expediente {
   created_at: string
   created_by_supervisor_id: string
   is_deleted: boolean
-  supervisor?: {
+  supervisor_creador?: {
+    id: string
     nombre: string
     email: string
   }
@@ -227,10 +228,10 @@ export function ExpedientesTable({
                   <TableCell>
                     <div className="text-sm">
                       <div className="font-medium">
-                        {expediente.supervisor?.nombre || 'N/A'}
+                        {expediente.supervisor_creador?.nombre || 'N/A'}
                       </div>
                       <div className="text-muted-foreground">
-                        {expediente.supervisor?.email || 'N/A'}
+                        {expediente.supervisor_creador?.email || 'N/A'}
                       </div>
                     </div>
                   </TableCell>

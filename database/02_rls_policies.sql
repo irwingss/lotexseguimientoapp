@@ -140,3 +140,251 @@ CREATE TRIGGER update_expedientes_updated_at
   BEFORE UPDATE ON public.expedientes
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
+
+-- =============================================
+-- POLÍTICAS RLS PARA EXPEDIENTES
+-- =============================================
+
+-- Habilitar RLS en expedientes
+ALTER TABLE public.expedientes ENABLE ROW LEVEL SECURITY;
+
+-- Política SELECT: Usuarios ven expedientes asignados o ADMIN ve todos
+CREATE POLICY "expedientes_select_policy" ON public.expedientes
+  FOR SELECT
+  TO authenticated
+  USING (
+    -- El usuario debe existir en supervisores y estar activo
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE is_active = true AND is_deleted = false
+    )
+    AND (
+      -- ADMIN puede ver todos los expedientes
+      auth.email() IN (
+        SELECT email FROM public.supervisores 
+        WHERE permisos_sistema = 'ADMIN' 
+        AND is_active = true 
+        AND is_deleted = false
+      )
+      OR
+      -- Usuario asignado al expediente puede verlo
+      id IN (
+        SELECT es.expediente_id 
+        FROM public.expediente_supervisores es
+        JOIN public.supervisores s ON es.supervisor_id = s.id
+        WHERE s.email = auth.email()
+        AND s.is_active = true 
+        AND s.is_deleted = false
+        AND es.is_deleted = false
+      )
+    )
+    -- Para no-ADMIN, solo expedientes no eliminados
+    AND (
+      auth.email() IN (
+        SELECT email FROM public.supervisores 
+        WHERE permisos_sistema = 'ADMIN' 
+        AND is_active = true 
+        AND is_deleted = false
+      )
+      OR is_deleted = false
+    )
+  );
+
+-- Política INSERT: Solo ADMIN puede crear expedientes
+CREATE POLICY "expedientes_insert_policy" ON public.expedientes
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE permisos_sistema = 'ADMIN' 
+      AND is_active = true 
+      AND is_deleted = false
+    )
+  );
+
+-- Política UPDATE: Solo ADMIN puede actualizar expedientes
+CREATE POLICY "expedientes_update_policy" ON public.expedientes
+  FOR UPDATE
+  TO authenticated
+  USING (
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE permisos_sistema = 'ADMIN' 
+      AND is_active = true 
+      AND is_deleted = false
+    )
+  );
+
+-- Política DELETE: Bloqueada (usar RPC para soft delete)
+CREATE POLICY "expedientes_delete_policy" ON public.expedientes
+  FOR DELETE
+  TO authenticated
+  USING (false);
+
+-- =============================================
+-- POLÍTICAS RLS PARA ACCIONES
+-- =============================================
+
+-- Habilitar RLS en acciones
+ALTER TABLE public.acciones ENABLE ROW LEVEL SECURITY;
+
+-- Política SELECT: Usuarios ven acciones de expedientes asignados o ADMIN ve todas
+CREATE POLICY "acciones_select_policy" ON public.acciones
+  FOR SELECT
+  TO authenticated
+  USING (
+    -- El usuario debe existir en supervisores y estar activo
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE is_active = true AND is_deleted = false
+    )
+    AND (
+      -- ADMIN puede ver todas las acciones
+      auth.email() IN (
+        SELECT email FROM public.supervisores 
+        WHERE permisos_sistema = 'ADMIN' 
+        AND is_active = true 
+        AND is_deleted = false
+      )
+      OR
+      -- Usuario asignado al expediente puede ver sus acciones
+      expediente_id IN (
+        SELECT es.expediente_id 
+        FROM public.expediente_supervisores es
+        JOIN public.supervisores s ON es.supervisor_id = s.id
+        WHERE s.email = auth.email()
+        AND s.is_active = true 
+        AND s.is_deleted = false
+        AND es.is_deleted = false
+      )
+    )
+    -- Para no-ADMIN, solo acciones no eliminadas
+    AND (
+      auth.email() IN (
+        SELECT email FROM public.supervisores 
+        WHERE permisos_sistema = 'ADMIN' 
+        AND is_active = true 
+        AND is_deleted = false
+      )
+      OR is_deleted = false
+    )
+  );
+
+-- Política INSERT: Solo ADMIN puede crear acciones
+CREATE POLICY "acciones_insert_policy" ON public.acciones
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE permisos_sistema = 'ADMIN' 
+      AND is_active = true 
+      AND is_deleted = false
+    )
+  );
+
+-- Política UPDATE: Solo ADMIN puede actualizar acciones
+CREATE POLICY "acciones_update_policy" ON public.acciones
+  FOR UPDATE
+  TO authenticated
+  USING (
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE permisos_sistema = 'ADMIN' 
+      AND is_active = true 
+      AND is_deleted = false
+    )
+  );
+
+-- Política DELETE: Bloqueada (usar RPC para soft delete)
+CREATE POLICY "acciones_delete_policy" ON public.acciones
+  FOR DELETE
+  TO authenticated
+  USING (false);
+
+-- =============================================
+-- POLÍTICAS RLS PARA EXPEDIENTE_SUPERVISORES
+-- =============================================
+
+-- Habilitar RLS en expediente_supervisores
+ALTER TABLE public.expediente_supervisores ENABLE ROW LEVEL SECURITY;
+
+-- Política SELECT: ADMIN y SUPERVISOR_LIDER ven todas; usuarios ven sus asignaciones
+CREATE POLICY "expediente_supervisores_select_policy" ON public.expediente_supervisores
+  FOR SELECT
+  TO authenticated
+  USING (
+    -- El usuario debe existir en supervisores y estar activo
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE is_active = true AND is_deleted = false
+    )
+    AND (
+      -- ADMIN puede ver todas las asignaciones
+      auth.email() IN (
+        SELECT email FROM public.supervisores 
+        WHERE permisos_sistema = 'ADMIN' 
+        AND is_active = true 
+        AND is_deleted = false
+      )
+      OR
+      -- SUPERVISOR_LIDER puede ver todas las asignaciones
+      auth.email() IN (
+        SELECT email FROM public.supervisores 
+        WHERE rol = 'SUPERVISOR_LIDER' 
+        AND is_active = true 
+        AND is_deleted = false
+      )
+      OR
+      -- Usuario puede ver sus propias asignaciones
+      supervisor_id IN (
+        SELECT id FROM public.supervisores 
+        WHERE email = auth.email()
+        AND is_active = true 
+        AND is_deleted = false
+      )
+    )
+    -- Para no-ADMIN, solo asignaciones no eliminadas
+    AND (
+      auth.email() IN (
+        SELECT email FROM public.supervisores 
+        WHERE permisos_sistema = 'ADMIN' 
+        AND is_active = true 
+        AND is_deleted = false
+      )
+      OR is_deleted = false
+    )
+  );
+
+-- Política INSERT: Solo ADMIN puede crear asignaciones
+CREATE POLICY "expediente_supervisores_insert_policy" ON public.expediente_supervisores
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE permisos_sistema = 'ADMIN' 
+      AND is_active = true 
+      AND is_deleted = false
+    )
+  );
+
+-- Política UPDATE: Solo ADMIN puede actualizar asignaciones
+CREATE POLICY "expediente_supervisores_update_policy" ON public.expediente_supervisores
+  FOR UPDATE
+  TO authenticated
+  USING (
+    auth.email() IN (
+      SELECT email FROM public.supervisores 
+      WHERE permisos_sistema = 'ADMIN' 
+      AND is_active = true 
+      AND is_deleted = false
+    )
+  );
+
+-- Política DELETE: Bloqueada (usar RPC para soft delete)
+CREATE POLICY "expediente_supervisores_delete_policy" ON public.expediente_supervisores
+  FOR DELETE
+  TO authenticated
+  USING (false);

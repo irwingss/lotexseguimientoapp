@@ -189,55 +189,50 @@ export function EditExpedienteDialog({
     try {
       setLoading(true)
 
-      // Actualizar expediente
-      const { error: expedienteError } = await supabase
-        .from('expedientes')
-        .update({
-          expediente_codigo: formData.expediente_codigo.trim(),
-          nombre: formData.nombre.trim(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', expediente.id)
+      // Actualizar expediente usando función RPC
+      const { error: expedienteError } = await supabase.rpc('update_expediente', {
+        p_expediente_id: expediente.id,
+        p_expediente_codigo: formData.expediente_codigo.trim(),
+        p_nombre: formData.nombre.trim()
+      })
 
       if (expedienteError) {
         console.error('Error updating expediente:', expedienteError)
-        console.error('Error al actualizar expediente')
+        console.error('Error al actualizar expediente: ' + expedienteError.message)
         return
       }
 
-      // Procesar acciones
+      // Procesar acciones usando funciones RPC
       for (const accion of acciones) {
-        if (accion.id) {
-          // Actualizar acción existente
-          const { error } = await supabase
-            .from('acciones')
-            .update({
-              codigo_accion: accion.codigo_accion.trim(),
-              fecha_inicio: accion.fecha_inicio,
-              fecha_fin: accion.fecha_fin
-            })
-            .eq('id', accion.id)
-
-          if (error) {
-            console.error('Error updating accion:', error)
-            console.error('Error al actualizar acción')
-            return
-          }
-        } else {
-          // Crear nueva acción
-          const { error } = await supabase
-            .from('acciones')
-            .insert({
-              expediente_id: expediente.id,
-              codigo_accion: accion.codigo_accion.trim(),
-              fecha_inicio: accion.fecha_inicio,
-              fecha_fin: accion.fecha_fin
+        if (accion.codigo_accion.trim()) { // Solo procesar acciones con código
+          if (accion.id) {
+            // Actualizar acción existente usando función RPC
+            const { error } = await supabase.rpc('update_accion', {
+              p_accion_id: accion.id,
+              p_codigo_accion: accion.codigo_accion.trim(),
+              p_fecha_inicio: accion.fecha_inicio,
+              p_fecha_fin: accion.fecha_fin
             })
 
-          if (error) {
-            console.error('Error creating accion:', error)
-            console.error('Error al crear acción')
-            return
+            if (error) {
+              console.error('Error updating accion:', error)
+              console.error('Error al actualizar acción: ' + error.message)
+              return
+            }
+          } else {
+            // Crear nueva acción usando función RPC
+            const { error } = await supabase.rpc('create_accion', {
+              p_expediente_id: expediente.id,
+              p_codigo_accion: accion.codigo_accion.trim(),
+              p_fecha_inicio: accion.fecha_inicio,
+              p_fecha_fin: accion.fecha_fin
+            })
+
+            if (error) {
+              console.error('Error creating accion:', error)
+              console.error('Error al crear acción: ' + error.message)
+              return
+            }
           }
         }
       }

@@ -252,36 +252,64 @@ $$;
 CREATE OR REPLACE FUNCTION public.restore_supervisor(
   p_supervisor_id UUID
 )
-RETURNS BOOLEAN
+RETURNS TABLE (
+  id UUID,
+  nombre TEXT,
+  email CITEXT,
+  rol supervisor_role,
+  permisos_sistema permisos_sistema,
+  is_active BOOLEAN,
+  created_at TIMESTAMPTZ,
+  is_deleted BOOLEAN
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  -- Verificar permisos ADMIN
-  IF NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Acceso denegado: solo ADMIN puede restaurar supervisores';
+  -- Verificar que el usuario tiene permisos
+  IF NOT EXISTS (
+    SELECT 1 FROM public.supervisores 
+    WHERE email = auth.email()
+    AND permisos_sistema = 'ADMIN'
+    AND is_active = true 
+    AND is_deleted = false
+  ) THEN
+    RAISE EXCEPTION 'Acceso denegado: solo usuarios ADMIN pueden restaurar supervisores';
   END IF;
 
   -- Verificar que el supervisor existe y está eliminado
   IF NOT EXISTS (
     SELECT 1 FROM public.supervisores 
-    WHERE id = p_supervisor_id AND is_deleted = true
+    WHERE public.supervisores.id = p_supervisor_id 
+    AND is_deleted = true
   ) THEN
     RAISE EXCEPTION 'Supervisor no encontrado o no está eliminado';
   END IF;
 
   -- Restaurar supervisor
-  UPDATE public.supervisores SET
+  UPDATE public.supervisores 
+  SET 
     is_deleted = false,
     deleted_at = NULL,
     deleted_by_supervisor_id = NULL,
-    deleted_reason = NULL,
     deleted_geom_4326 = NULL,
     deleted_precision_m = NULL,
-    is_active = true  -- Reactivar por defecto
-  WHERE id = p_supervisor_id AND is_deleted = true;
+    deleted_reason = NULL
+  WHERE public.supervisores.id = p_supervisor_id;
 
-  RETURN FOUND;
+  -- Retornar supervisor restaurado
+  RETURN QUERY
+  SELECT 
+    s.id,
+    s.nombre,
+    s.email,
+    s.rol,
+    s.permisos_sistema,
+    s.is_active,
+    s.created_at,
+    s.is_deleted
+  FROM public.supervisores s
+  WHERE s.id = p_supervisor_id;
 END;
 $$;
 

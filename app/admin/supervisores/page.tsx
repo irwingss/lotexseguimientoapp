@@ -1,4 +1,6 @@
-import { Suspense } from 'react'
+'use client'
+
+import { Suspense, useState, useCallback } from 'react'
 import { SupervisoresTable } from '@/components/admin/supervisores-table'
 import { SupervisoresStats } from '@/components/admin/supervisores-stats'
 import { CreateSupervisorDialog } from '@/components/admin/create-supervisor-dialog'
@@ -7,6 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Plus, Users, Shield } from 'lucide-react'
 
 export default function SupervisoresAdminPage() {
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const handleSupervisorCreated = useCallback(() => {
+    // Forzar actualización de componentes
+    setRefreshKey(prev => prev + 1)
+  }, [])
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       {/* Header */}
@@ -20,7 +29,7 @@ export default function SupervisoresAdminPage() {
             Gestiona usuarios, roles y permisos del sistema
           </p>
         </div>
-        <CreateSupervisorDialog>
+        <CreateSupervisorDialog onSuccess={handleSupervisorCreated}>
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             Nuevo Supervisor
@@ -30,7 +39,7 @@ export default function SupervisoresAdminPage() {
 
       {/* Stats Cards */}
       <Suspense fallback={<div className="h-32 bg-muted animate-pulse rounded-lg" />}>
-        <SupervisoresStats />
+        <SupervisoresStats key={`stats-${refreshKey}`} />
       </Suspense>
 
       {/* Main Content */}
@@ -46,7 +55,7 @@ export default function SupervisoresAdminPage() {
         </CardHeader>
         <CardContent>
           <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-lg" />}>
-            <SupervisoresTable />
+            <SupervisoresTable key={`table-${refreshKey}`} />
           </Suspense>
         </CardContent>
       </Card>

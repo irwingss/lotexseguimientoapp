@@ -18,7 +18,8 @@ interface Expediente {
   created_at: string
   created_by_supervisor_id: string
   is_deleted: boolean
-  supervisor?: {
+  supervisor_creador?: {
+    id: string
     nombre: string
     email: string
   }
@@ -55,25 +56,14 @@ export default function ExpedientesPage() {
     try {
       setLoading(true)
       
-      let query = supabase
-        .from('expedientes')
-        .select(`
-          *,
-          supervisor:supervisores!expedientes_created_by_supervisor_id_fkey(nombre, email),
-          acciones(id, codigo_accion, fecha_inicio, fecha_fin),
-          supervisores_asignados:expediente_supervisores(
-            supervisor:supervisores(id, nombre, email, rol)
-          )
-        `)
-        .order('created_at', { ascending: false })
-
-      if (statusFilter === 'active') {
-        query = query.eq('is_deleted', false)
-      } else if (statusFilter === 'deleted') {
-        query = query.eq('is_deleted', true)
-      }
-
-      const { data, error } = await query
+      // Lógica corregida para filtros de eliminados
+      const includeDeleted = statusFilter === 'all'
+      const deletedOnly = statusFilter === 'deleted'
+      const { data, error } = await supabase.rpc('get_expedientes', {
+        p_include_deleted: includeDeleted,
+        p_search_term: searchTerm || null,
+        p_deleted_only: deletedOnly
+      })
 
       if (error) {
         console.error('Error fetching expedientes:', error)
@@ -92,22 +82,12 @@ export default function ExpedientesPage() {
 
   useEffect(() => {
     fetchExpedientes()
-  }, [statusFilter])
+  }, [statusFilter, searchTerm])
 
+  // Simplificar: la función RPC ya maneja la búsqueda, no necesitamos filtrado local
   useEffect(() => {
-    if (!searchTerm) {
-      setFilteredExpedientes(expedientes)
-      return
-    }
-
-    const filtered = expedientes.filter(expediente =>
-      expediente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expediente.expediente_codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expediente.supervisor?.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    
-    setFilteredExpedientes(filtered)
-  }, [expedientes, searchTerm])
+    setFilteredExpedientes(expedientes)
+  }, [expedientes])
 
   const handleExpedienteCreated = () => {
     fetchExpedientes()
@@ -166,7 +146,7 @@ export default function ExpedientesPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por nombre, código o supervisor..."
+                  placeholder="Buscar por nombre o código de expediente"
                   value={searchTerm}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                   className="pl-10"

@@ -154,38 +154,34 @@ export function CreateExpedienteDialog({
     try {
       setLoading(true)
 
-      // Crear expediente
-      const { data: expedienteData, error: expedienteError } = await supabase
-        .from('expedientes')
-        .insert({
-          expediente_codigo: formData.expediente_codigo.trim(),
-          nombre: formData.nombre.trim()
-        })
-        .select()
-        .single()
+      // Crear expediente usando función RPC
+      const { data: expedienteId, error: expedienteError } = await supabase.rpc('create_expediente', {
+        p_expediente_codigo: formData.expediente_codigo.trim(),
+        p_nombre: formData.nombre.trim()
+      })
 
       if (expedienteError) {
         console.error('Error creating expediente:', expedienteError)
-        console.error('Error al crear el expediente')
+        console.error('Error al crear el expediente: ' + expedienteError.message)
         return
       }
 
-      // Crear acciones
-      const accionesData = acciones.map(accion => ({
-        expediente_id: expedienteData.id,
-        codigo_accion: accion.codigo_accion.trim(),
-        fecha_inicio: accion.fecha_inicio,
-        fecha_fin: accion.fecha_fin
-      }))
+      // Crear acciones usando función RPC
+      for (const accion of acciones) {
+        if (accion.codigo_accion.trim()) { // Solo crear acciones con código
+          const { error: accionError } = await supabase.rpc('create_accion', {
+            p_expediente_id: expedienteId,
+            p_codigo_accion: accion.codigo_accion.trim(),
+            p_fecha_inicio: accion.fecha_inicio,
+            p_fecha_fin: accion.fecha_fin
+          })
 
-      const { error: accionesError } = await supabase
-        .from('acciones')
-        .insert(accionesData)
-
-      if (accionesError) {
-        console.error('Error creating acciones:', accionesError)
-        console.error('Error al crear las acciones')
-        return
+          if (accionError) {
+            console.error('Error creating accion:', accionError)
+            console.error('Error al crear la acción: ' + accionError.message)
+            return
+          }
+        }
       }
 
       onExpedienteCreated()

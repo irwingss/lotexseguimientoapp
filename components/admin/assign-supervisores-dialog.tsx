@@ -103,11 +103,13 @@ export function AssignSupervisoresDialog({
 
   const fetchSupervisores = async () => {
     try {
-      const { data, error } = await supabase
-        .from('supervisores')
-        .select('*')
-        .eq('is_deleted', false)
-        .order('nombre')
+      // Usar función RPC en lugar de acceso directo a la tabla
+      const { data, error } = await supabase.rpc('get_supervisores', {
+        p_include_deleted: false,
+        p_rol_filter: null,
+        p_active_filter: true,
+        p_deleted_only: false
+      })
 
       if (error) {
         console.error('Error fetching supervisores:', error)
@@ -307,60 +309,317 @@ export function AssignSupervisoresDialog({
             </CardContent>
           </Card>
 
-          {/* Lista de Supervisores */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <UserCheck className="h-5 w-5" />
-                Supervisores Disponibles
-                <Badge variant="outline">
-                  {selectedSupervisores.size} seleccionados
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                Selecciona los supervisores que trabajarán en este expediente
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {filteredSupervisores.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-                  <UserX className="h-8 w-8 mb-2" />
-                  <p>No se encontraron supervisores</p>
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {filteredSupervisores.map((supervisor) => (
-                    <div
-                      key={supervisor.id}
-                      className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50"
-                    >
-                      <Checkbox
-                        id={supervisor.id}
-                        checked={selectedSupervisores.has(supervisor.id)}
-                        onCheckedChange={() => handleSupervisorToggle(supervisor.id)}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Label 
-                            htmlFor={supervisor.id}
-                            className="font-medium cursor-pointer"
-                          >
-                            {supervisor.nombre}
-                          </Label>
-                          <Badge variant={getRoleBadgeVariant(supervisor.rol)}>
-                            {getRoleDisplayName(supervisor.rol)}
+          {/* Lista de Supervisores Organizados por Rol */}
+          <div className="space-y-4">
+            {filteredSupervisores.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                    <UserX className="h-8 w-8 mb-2" />
+                    <p>No se encontraron supervisores</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* Supervisores Líderes */}
+                {(() => {
+                  const supervisoresLideres = filteredSupervisores.filter(s => s.rol === 'SUPERVISOR_LIDER')
+                  if (supervisoresLideres.length === 0) return null
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <UserCheck className="h-5 w-5" />
+                          Supervisores Líderes Disponibles
+                          <Badge variant="default">
+                            {supervisoresLideres.filter(s => selectedSupervisores.has(s.id)).length}/{supervisoresLideres.length}
                           </Badge>
+                        </CardTitle>
+                        <CardDescription>
+                          Supervisores con rol de liderazgo y coordinación
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-3">
+                          {supervisoresLideres.map((supervisor) => (
+                            <div
+                              key={supervisor.id}
+                              className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                              onClick={() => handleSupervisorToggle(supervisor.id)}
+                            >
+                              <Checkbox
+                                id={supervisor.id}
+                                checked={selectedSupervisores.has(supervisor.id)}
+                                onCheckedChange={() => handleSupervisorToggle(supervisor.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <Label 
+                                    htmlFor={supervisor.id}
+                                    className="font-medium cursor-pointer"
+                                  >
+                                    {supervisor.nombre}
+                                  </Label>
+                                  <Badge variant={getRoleBadgeVariant(supervisor.rol)}>
+                                    {getRoleDisplayName(supervisor.rol)}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate">
+                                  {supervisor.email}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {supervisor.email}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      </CardContent>
+                    </Card>
+                  )
+                })()}
+
+                {/* Supervisores */}
+                {(() => {
+                  const supervisores = filteredSupervisores.filter(s => s.rol === 'SUPERVISOR')
+                  if (supervisores.length === 0) return null
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <UserCheck className="h-5 w-5" />
+                          Supervisores Disponibles
+                          <Badge variant="secondary">
+                            {supervisores.filter(s => selectedSupervisores.has(s.id)).length}/{supervisores.length}
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription>
+                          Supervisores de campo y operaciones
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-3">
+                          {supervisores.map((supervisor) => (
+                            <div
+                              key={supervisor.id}
+                              className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                              onClick={() => handleSupervisorToggle(supervisor.id)}
+                            >
+                              <Checkbox
+                                id={supervisor.id}
+                                checked={selectedSupervisores.has(supervisor.id)}
+                                onCheckedChange={() => handleSupervisorToggle(supervisor.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <Label 
+                                    htmlFor={supervisor.id}
+                                    className="font-medium cursor-pointer"
+                                  >
+                                    {supervisor.nombre}
+                                  </Label>
+                                  <Badge variant={getRoleBadgeVariant(supervisor.rol)}>
+                                    {getRoleDisplayName(supervisor.rol)}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate">
+                                  {supervisor.email}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })()}
+
+                {/* Monitores */}
+                {(() => {
+                  const monitores = filteredSupervisores.filter(s => s.rol === 'MONITOR')
+                  if (monitores.length === 0) return null
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <UserCheck className="h-5 w-5" />
+                          Monitores Disponibles
+                          <Badge variant="outline">
+                            {monitores.filter(s => selectedSupervisores.has(s.id)).length}/{monitores.length}
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription>
+                          Personal de monitoreo y seguimiento
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-3">
+                          {monitores.map((supervisor) => (
+                            <div
+                              key={supervisor.id}
+                              className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                              onClick={() => handleSupervisorToggle(supervisor.id)}
+                            >
+                              <Checkbox
+                                id={supervisor.id}
+                                checked={selectedSupervisores.has(supervisor.id)}
+                                onCheckedChange={() => handleSupervisorToggle(supervisor.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <Label 
+                                    htmlFor={supervisor.id}
+                                    className="font-medium cursor-pointer"
+                                  >
+                                    {supervisor.nombre}
+                                  </Label>
+                                  <Badge variant={getRoleBadgeVariant(supervisor.rol)}>
+                                    {getRoleDisplayName(supervisor.rol)}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate">
+                                  {supervisor.email}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })()}
+
+                {/* Conductores */}
+                {(() => {
+                  const conductores = filteredSupervisores.filter(s => s.rol === 'CONDUCTOR')
+                  if (conductores.length === 0) return null
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <UserCheck className="h-5 w-5" />
+                          Conductores Disponibles
+                          <Badge variant="destructive">
+                            {conductores.filter(s => selectedSupervisores.has(s.id)).length}/{conductores.length}
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription>
+                          Personal de transporte y logística
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-3">
+                          {conductores.map((supervisor) => (
+                            <div
+                              key={supervisor.id}
+                              className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                              onClick={() => handleSupervisorToggle(supervisor.id)}
+                            >
+                              <Checkbox
+                                id={supervisor.id}
+                                checked={selectedSupervisores.has(supervisor.id)}
+                                onCheckedChange={() => handleSupervisorToggle(supervisor.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <Label 
+                                    htmlFor={supervisor.id}
+                                    className="font-medium cursor-pointer"
+                                  >
+                                    {supervisor.nombre}
+                                  </Label>
+                                  <Badge variant={getRoleBadgeVariant(supervisor.rol)}>
+                                    {getRoleDisplayName(supervisor.rol)}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate">
+                                  {supervisor.email}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })()}
+
+                {/* Responsables OIG */}
+                {(() => {
+                  const responsablesOIG = filteredSupervisores.filter(s => s.rol === 'RESPONSABLE_OIG')
+                  if (responsablesOIG.length === 0) return null
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <UserCheck className="h-5 w-5" />
+                          Responsables OIG Disponibles
+                          <Badge variant="default">
+                            {responsablesOIG.filter(s => selectedSupervisores.has(s.id)).length}/{responsablesOIG.length}
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription>
+                          Responsables de la Oficina de Integridad Gubernamental
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-3">
+                          {responsablesOIG.map((supervisor) => (
+                            <div
+                              key={supervisor.id}
+                              className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                              onClick={() => handleSupervisorToggle(supervisor.id)}
+                            >
+                              <Checkbox
+                                id={supervisor.id}
+                                checked={selectedSupervisores.has(supervisor.id)}
+                                onCheckedChange={() => handleSupervisorToggle(supervisor.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <Label 
+                                    htmlFor={supervisor.id}
+                                    className="font-medium cursor-pointer"
+                                  >
+                                    {supervisor.nombre}
+                                  </Label>
+                                  <Badge variant={getRoleBadgeVariant(supervisor.rol)}>
+                                    {getRoleDisplayName(supervisor.rol)}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate">
+                                  {supervisor.email}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })()}
+
+                {/* Resumen Total */}
+                <Card className="bg-muted/20">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Resumen de Selección
+                      <Badge variant="outline" className="bg-background">
+                        {selectedSupervisores.size} total seleccionados
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Total de supervisores seleccionados para este expediente
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </>
+            )}
+          </div>
 
           {/* Resumen de Selección */}
           {selectedSupervisores.size > 0 && (

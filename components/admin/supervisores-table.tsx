@@ -59,14 +59,17 @@ export function SupervisoresTable() {
     try {
       setLoading(true)
       
-      const includeDeleted = statusFilter === 'deleted' || statusFilter === 'all'
+      // Lógica corregida para filtros de eliminados
+      const includeDeleted = statusFilter === 'all'
+      const deletedOnly = statusFilter === 'deleted'
       const activeFilter = statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : null
       const rolFilter = roleFilter === 'all' ? null : roleFilter
 
       const { data, error } = await supabase.rpc('get_supervisores', {
         p_include_deleted: includeDeleted,
         p_rol_filter: rolFilter,
-        p_active_filter: activeFilter
+        p_active_filter: activeFilter,
+        p_deleted_only: deletedOnly
       })
 
       if (error) {

@@ -20,6 +20,9 @@ meta:
 principios:
   - "Construir de atrás hacia adelante: esquema + RLS + RPC antes del UI."
   - "Cada historia tiene DoD (Definition of Done) con pruebas y verificación RLS."
+  - "Nunca hagas desarrollos temporales. SIEMPRE agota todas las opciones para resolver los problemas."
+  - "Crea siempre componentes del frontend que hagan consultas a través de funciones RPC, nunca como consultas directas a la base de datos."
+  - "Crea siempre componentes del frontend que hagan mutaciones a través de funciones RPC, nunca como mutaciones directas a la base de datos."
   - "Nada a producción sin revisiones (PR + checklist + previsualización Vercel)."
   - "PWA: en móviles, instalación y precarga obligatorias antes de uso."
   - "Telemetría y logs desde el día 1 (Sentry opcional, logs de Edge Functions y Postgres)."
