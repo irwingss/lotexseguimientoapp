@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 import {
   Table,
   TableBody,
@@ -34,7 +34,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { MoreHorizontal, Edit, Trash2, RotateCcw, Users, Calendar, Eye } from 'lucide-react'
 import { EditExpedienteDialog } from '@/components/admin/edit-expediente-dialog'
 import { AssignSupervisoresDialog } from '@/components/admin/assign-supervisores-dialog'
-import { toast } from 'sonner'
+// import { toast } from 'sonner' // Removed for now
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -86,7 +86,10 @@ export function ExpedientesTable({
   const [selectedExpediente, setSelectedExpediente] = useState<Expediente | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   const handleEdit = (expediente: Expediente) => {
     setSelectedExpediente(expediente)
@@ -116,7 +119,7 @@ export function ExpedientesTable({
 
       if (error) {
         console.error('Error deleting expediente:', error)
-        toast.error('Error al eliminar expediente')
+        console.error('Error al eliminar expediente')
         return
       }
 
@@ -125,7 +128,7 @@ export function ExpedientesTable({
       setSelectedExpediente(null)
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al eliminar expediente')
+      console.error('Error al eliminar expediente')
     } finally {
       setActionLoading(null)
     }
@@ -141,14 +144,14 @@ export function ExpedientesTable({
 
       if (error) {
         console.error('Error restoring expediente:', error)
-        toast.error('Error al restaurar expediente')
+        console.error('Error al restaurar expediente')
         return
       }
 
       onExpedienteRestored()
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al restaurar expediente')
+      console.error('Error al restaurar expediente')
     } finally {
       setActionLoading(null)
     }

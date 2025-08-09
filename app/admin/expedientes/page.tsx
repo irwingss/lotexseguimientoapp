@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Search, Filter } from 'lucide-react'
@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ExpedientesTable } from '@/components/admin/expedientes-table'
 import { ExpedientesStats } from '@/components/admin/expedientes-stats'
 import { CreateExpedienteDialog } from '@/components/admin/create-expediente-dialog'
-import { toast } from 'sonner'
 
 interface Expediente {
   id: string
@@ -47,7 +46,10 @@ export default function ExpedientesPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deleted'>('active')
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   const fetchExpedientes = async () => {
     try {
@@ -75,14 +77,14 @@ export default function ExpedientesPage() {
 
       if (error) {
         console.error('Error fetching expedientes:', error)
-        toast.error('Error al cargar expedientes')
+        console.error('Error al cargar expedientes')
         return
       }
 
       setExpedientes(data || [])
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al cargar expedientes')
+      console.error('Error al cargar expedientes')
     } finally {
       setLoading(false)
     }
@@ -110,22 +112,22 @@ export default function ExpedientesPage() {
   const handleExpedienteCreated = () => {
     fetchExpedientes()
     setCreateDialogOpen(false)
-    toast.success('Expediente creado exitosamente')
+    console.log('Expediente creado exitosamente')
   }
 
   const handleExpedienteUpdated = () => {
     fetchExpedientes()
-    toast.success('Expediente actualizado exitosamente')
+    console.log('Expediente actualizado exitosamente')
   }
 
   const handleExpedienteDeleted = () => {
     fetchExpedientes()
-    toast.success('Expediente eliminado exitosamente')
+    console.log('Expediente eliminado exitosamente')
   }
 
   const handleExpedienteRestored = () => {
     fetchExpedientes()
-    toast.success('Expediente restaurado exitosamente')
+    console.log('Expediente restaurado exitosamente')
   }
 
   return (
@@ -166,7 +168,7 @@ export default function ExpedientesPage() {
                 <Input
                   placeholder="Buscar por nombre, código o supervisor..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
