@@ -257,7 +257,7 @@ fases:
       - "Actualizar badges de 'Completa' leyendo v_resumen_por_locacion"
     DoD:
       - "RPCs devuelven conteos coherentes en dry_run y aplican cambios reales"
-      - "RLS: solo afecta expedientes donde el usuario está asignado (no-ADMIN)"
+      - "RLS: solo afecta expedientes donde el usuario está asignado (no_ADMIN en persmisos_sistema)"
       - "E2E: cerrar locación en bloque y luego replantear/añadir un punto funciona sin fricción"
 
   - nombre: 9_vuelos_avance

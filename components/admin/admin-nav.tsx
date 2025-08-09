@@ -14,10 +14,10 @@ const adminNavItems = [
     description: 'Panel principal de administración'
   },
   {
-    title: 'Supervisores',
-    href: '/admin/supervisores',
+    title: 'Personal',
+    href: '/admin/personal',
     icon: Users,
-    description: 'Gestión de usuarios y permisos'
+    description: 'Gestión de personal del sistema'
   },
   {
     title: 'Expedientes',

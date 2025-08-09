@@ -53,7 +53,7 @@ convenciones:
 
 enums:
   supervisor_role: [SUPERVISOR, SUPERVISOR_LIDER, MONITOR, CONDUCTOR, RESPONSABLE_OIG]
-  permisos_sistema: [ADMIN, SUPERVISOR, MONITOR]
+  permisos_sistema: [ADMIN, no_ADMIN]
   status_trabajo: [PENDIENTE, HECHO, DESCARTADO]
   punto_estatus: [PENDIENTE, MARCADO, MONITOREADO, MARCADO_Y_MONITOREADO, DESCARTADO, REPLANTEADO, ANADIDO]
   vuelo_tipo: [PAF, PD]
@@ -350,16 +350,16 @@ rls_policies:
         - "Permitido al propio usuario para su fila (email del JWT = email) siempre que is_deleted=false."
       insert_update_delete: ["Solo usuarios con permisos_sistema=ADMIN (borrado lógico via RPC)."]
     expedientes:
-      select: ["Permitido si el usuario está asignado en expediente_supervisores o tiene permisos_sistema=ADMIN; para no-ADMIN is_deleted=false."]
+      select: ["Permitido si el usuario está asignado en expediente_supervisores o tiene permisos_sistema=ADMIN; para no_ADMIN is_deleted=false."]
       insert_update_delete: ["Solo usuarios con permisos_sistema=ADMIN (borrado lógico via RPC)."]
     acciones:
-      select: ["Permitido si el usuario tiene acceso al expediente padre o tiene permisos_sistema=ADMIN; para no-ADMIN is_deleted=false."]
+      select: ["Permitido si el usuario tiene acceso al expediente padre o tiene permisos_sistema=ADMIN; para no_ADMIN is_deleted=false."]
       insert_update_delete: ["Solo usuarios con permisos_sistema=ADMIN (borrado lógico via RPC)."]
     expediente_supervisores:
-      select: ["Usuarios con permisos_sistema=ADMIN y usuarios con rol SUPERVISOR_LIDER; o cualquier usuario para ver sus propias asignaciones (is_deleted=false para no-ADMIN)."]
+      select: ["Usuarios con permisos_sistema=ADMIN y usuarios con rol SUPERVISOR_LIDER; o cualquier usuario para ver sus propias asignaciones (is_deleted=false para no_ADMIN)."]
       insert_update_delete: ["Solo usuarios con permisos_sistema=ADMIN (borrado lógico via RPC)."]
     monitoreo_puntos:
-      select: ["Permitido si pertenece a expedientes donde el usuario esté asignado o el usuario tiene permisos_sistema=ADMIN o rol=SUPERVISOR_LIDER; para no-ADMIN is_deleted=false."]
+      select: ["Permitido si pertenece a expedientes donde el usuario esté asignado o el usuario tiene permisos_sistema=ADMIN o rol=SUPERVISOR_LIDER; para no_ADMIN is_deleted=false."]
       update:
         - "SUPERVISOR, SUPERVISOR_LIDER, MONITOR pueden actualizar solo columnas de avance (marcado_*, monitoreado_*, tipo_origen, parent_punto_id cuando crean replanteo/añadido); no pueden cambiar is_deleted."
       insert:
@@ -367,21 +367,21 @@ rls_policies:
         - "Usuarios con permisos_sistema=ADMIN pueden insertar cualquier fila (incluida importación masiva)."
       delete: ["Borrado lógico vía RPC solo usuarios con permisos_sistema=ADMIN."]
     vuelos_items:
-      select: ["Mismo criterio que monitoreo_puntos; para no-ADMIN is_deleted=false."]
+      select: ["Mismo criterio que monitoreo_puntos; para no_ADMIN is_deleted=false."]
       update:
         - "SUPERVISOR, SUPERVISOR_LIDER, MONITOR pueden actualizar marcado_*/volado_*; no pueden cambiar is_deleted."
       insert_delete: ["Solo usuarios con permisos_sistema=ADMIN (vía importación); borrado lógico vía RPC solo permisos_sistema=ADMIN."]
     planificacion_diaria:
-      select: ["Todos los asignados al expediente (is_deleted=false para no-ADMIN)."]
+      select: ["Todos los asignados al expediente (is_deleted=false para no_ADMIN)."]
       insert_update_delete: ["SUPERVISOR_LIDER y usuarios con permisos_sistema=ADMIN (borrado lógico: SUPERVISOR_LIDER y permisos_sistema=ADMIN; restauración: solo permisos_sistema=ADMIN)."]
     planificacion_miembros:
-      select: ["Todos los asignados al expediente (is_deleted=false para no-ADMIN)."]
+      select: ["Todos los asignados al expediente (is_deleted=false para no_ADMIN)."]
       insert_update_delete: ["SUPERVISOR_LIDER y usuarios con permisos_sistema=ADMIN (borrado lógico: SUPERVISOR_LIDER y permisos_sistema=ADMIN; restauración: solo permisos_sistema=ADMIN)."]
     planificacion_asignaciones:
-      select: ["Todos los asignados al expediente (is_deleted=false para no-ADMIN)."]
+      select: ["Todos los asignados al expediente (is_deleted=false para no_ADMIN)."]
       insert_update_delete: ["SUPERVISOR_LIDER y usuarios con permisos_sistema=ADMIN (borrado lógico: SUPERVISOR_LIDER y permisos_sistema=ADMIN; restauración: solo permisos_sistema=ADMIN)."]
     auditoria_eventos:
-      select: ["Usuarios con permisos_sistema=ADMIN y usuarios con rol SUPERVISOR_LIDER (is_deleted=false para no-ADMIN; permisos_sistema=ADMIN puede ver todo)."]
+      select: ["Usuarios con permisos_sistema=ADMIN y usuarios con rol SUPERVISOR_LIDER (is_deleted=false para no_ADMIN; permisos_sistema=ADMIN puede ver todo)."]
       insert: ["Cualquier operación backend que audite."]
       delete_update: ["Solo usuarios con permisos_sistema=ADMIN (se recomienda NO borrar; si fuera imprescindible, usar soft delete vía RPC)."]
 

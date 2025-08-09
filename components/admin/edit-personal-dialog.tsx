@@ -2,19 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
 type SupervisorRole = 'SUPERVISOR' | 'SUPERVISOR_LIDER' | 'MONITOR' | 'CONDUCTOR' | 'RESPONSABLE_OIG'
 type PermisosSystem = 'ADMIN' | 'no_ADMIN'
 
-interface Supervisor {
+interface Personal {
   id: string
   nombre: string
   email: string
@@ -27,8 +27,8 @@ interface Supervisor {
   deleted_reason: string | null
 }
 
-interface EditSupervisorDialogProps {
-  supervisor: Supervisor
+interface EditPersonalDialogProps {
+  personal: Personal
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
@@ -47,28 +47,29 @@ const PERMISOS_OPTIONS: { value: PermisosSystem; label: string; description: str
   { value: 'no_ADMIN', label: 'Usuario', description: 'Acceso limitado según rol asignado' }
 ]
 
-export function EditSupervisorDialog({ supervisor, open, onOpenChange, onSuccess }: EditSupervisorDialogProps) {
+export function EditPersonalDialog({ personal, open, onOpenChange, onSuccess }: EditPersonalDialogProps) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
-    nombre: supervisor.nombre,
-    email: supervisor.email,
-    rol: supervisor.rol,
-    permisos_sistema: supervisor.permisos_sistema,
-    is_active: supervisor.is_active
+    nombre: '',
+    email: '',
+    rol: '' as SupervisorRole,
+    permisos_sistema: 'no_ADMIN' as PermisosSystem,
+    is_active: true
   })
 
   const supabase = createClient()
 
-  // Update form data when supervisor changes
   useEffect(() => {
-    setFormData({
-      nombre: supervisor.nombre,
-      email: supervisor.email,
-      rol: supervisor.rol,
-      permisos_sistema: supervisor.permisos_sistema,
-      is_active: supervisor.is_active
-    })
-  }, [supervisor])
+    if (personal) {
+      setFormData({
+        nombre: personal.nombre,
+        email: personal.email,
+        rol: personal.rol,
+        permisos_sistema: personal.permisos_sistema,
+        is_active: personal.is_active
+      })
+    }
+  }, [personal])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,7 +90,7 @@ export function EditSupervisorDialog({ supervisor, open, onOpenChange, onSuccess
       setLoading(true)
 
       const { data, error } = await supabase.rpc('update_supervisor', {
-        p_supervisor_id: supervisor.id,
+        p_supervisor_id: personal.id,
         p_nombre: formData.nombre.trim(),
         p_email: formData.email.trim().toLowerCase(),
         p_rol: formData.rol,
@@ -98,17 +99,17 @@ export function EditSupervisorDialog({ supervisor, open, onOpenChange, onSuccess
       })
 
       if (error) {
-        console.error('Error updating supervisor:', error)
-        toast.error('Error al actualizar supervisor: ' + error.message)
+        console.error('Error updating personal:', error)
+        toast.error('Error al actualizar personal: ' + error.message)
         return
       }
 
-      toast.success('Supervisor actualizado correctamente')
+      toast.success('Personal actualizado correctamente')
       onOpenChange(false)
       onSuccess?.()
     } catch (error) {
-      console.error('Error updating supervisor:', error)
-      toast.error('Error al actualizar supervisor')
+      console.error('Error updating personal:', error)
+      toast.error('Error al actualizar personal')
     } finally {
       setLoading(false)
     }
@@ -116,14 +117,10 @@ export function EditSupervisorDialog({ supervisor, open, onOpenChange, onSuccess
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Editar Supervisor</DialogTitle>
-          <DialogDescription>
-            Modifica la información del supervisor. Solo usuarios ADMIN pueden realizar esta acción.
-          </DialogDescription>
+          <DialogTitle>Editar Personal</DialogTitle>
         </DialogHeader>
-        
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="nombre">Nombre completo *</Label>
@@ -143,7 +140,7 @@ export function EditSupervisorDialog({ supervisor, open, onOpenChange, onSuccess
               type="email"
               value={formData.email}
               onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              placeholder="supervisor@oefa.gob.pe"
+              placeholder="ejemplo@oefa.gob.pe"
               required
             />
           </div>
@@ -155,7 +152,7 @@ export function EditSupervisorDialog({ supervisor, open, onOpenChange, onSuccess
                 <SelectValue placeholder="Selecciona un rol" />
               </SelectTrigger>
               <SelectContent>
-                {ROLE_OPTIONS.map(option => (
+                {ROLE_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -171,7 +168,7 @@ export function EditSupervisorDialog({ supervisor, open, onOpenChange, onSuccess
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PERMISOS_OPTIONS.map(option => (
+                {PERMISOS_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     <div className="flex flex-col">
                       <span>{option.label}</span>
@@ -189,18 +186,18 @@ export function EditSupervisorDialog({ supervisor, open, onOpenChange, onSuccess
               checked={formData.is_active}
               onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
             />
-            <Label htmlFor="is_active">Usuario activo</Label>
+            <Label htmlFor="is_active">Personal activo</Label>
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end space-x-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Actualizar Supervisor
+              Actualizar Personal
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

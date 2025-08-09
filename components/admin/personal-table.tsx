@@ -11,12 +11,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { MoreHorizontal, Pencil, Trash2, RotateCcw, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
-import { EditSupervisorDialog } from './edit-supervisor-dialog'
+import { EditPersonalDialog } from '@/components/admin/edit-personal-dialog'
 
 type SupervisorRole = 'SUPERVISOR' | 'SUPERVISOR_LIDER' | 'MONITOR' | 'CONDUCTOR' | 'RESPONSABLE_OIG'
 type PermisosSystem = 'ADMIN' | 'no_ADMIN'
+type SortField = 'nombre' | 'email' | 'rol' | 'permisos_sistema' | 'is_active' | 'created_at'
+type SortDirection = 'asc' | 'desc'
 
-interface Supervisor {
+interface Personal {
   id: string
   nombre: string
   email: string
@@ -42,24 +44,21 @@ const PERMISOS_LABELS: Record<PermisosSystem, string> = {
   'no_ADMIN': 'Usuario'
 }
 
-type SortField = 'nombre' | 'email' | 'rol' | 'permisos_sistema' | 'is_active' | 'created_at'
-type SortDirection = 'asc' | 'desc'
-
-export function SupervisoresTable() {
-  const [supervisores, setSupervisores] = useState<Supervisor[]>([])
+export function PersonalTable() {
+  const [personal, setPersonal] = useState<Personal[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState<SupervisorRole | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'deleted' | 'all'>('active')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [supervisorToDelete, setSupervisorToDelete] = useState<Supervisor | null>(null)
-  const [editingSupervisor, setEditingSupervisor] = useState<Supervisor | null>(null)
+  const [personalToDelete, setPersonalToDelete] = useState<Personal | null>(null)
+  const [editingPersonal, setEditingPersonal] = useState<Personal | null>(null)
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
   const supabase = createClient()
 
-  const loadSupervisores = async () => {
+  const loadPersonal = async () => {
     try {
       setLoading(true)
       
@@ -77,68 +76,72 @@ export function SupervisoresTable() {
       })
 
       if (error) {
-        console.error('Error loading supervisores:', error)
-        toast.error('Error al cargar supervisores: ' + error.message)
+        console.error('Error loading personal:', error)
+        toast.error('Error al cargar personal: ' + error.message)
         return
       }
 
-      setSupervisores(data || [])
+      setPersonal(data || [])
     } catch (error) {
-      console.error('Error loading supervisores:', error)
-      toast.error('Error al cargar supervisores')
+      console.error('Error loading personal:', error)
+      toast.error('Error al cargar personal')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDeleteSupervisor = async () => {
-    if (!supervisorToDelete) return
+  const handleDeletePersonal = async () => {
+    if (!personalToDelete) return
 
     try {
       const { error } = await supabase.rpc('delete_supervisor', {
-        p_supervisor_id: supervisorToDelete.id,
+        p_supervisor_id: personalToDelete.id,
         p_reason: 'Eliminado desde interfaz de administración'
       })
 
       if (error) {
-        console.error('Error deleting supervisor:', error)
-        toast.error('Error al eliminar supervisor: ' + error.message)
+        console.error('Error deleting personal:', error)
+        toast.error('Error al eliminar personal: ' + error.message)
         return
       }
 
-      toast.success('Supervisor eliminado correctamente')
-      loadSupervisores()
+      toast.success('Personal eliminado correctamente')
+      loadPersonal()
     } catch (error) {
-      console.error('Error deleting supervisor:', error)
-      toast.error('Error al eliminar supervisor')
+      console.error('Error deleting personal:', error)
+      toast.error('Error al eliminar personal')
     } finally {
       setDeleteDialogOpen(false)
-      setSupervisorToDelete(null)
+      setPersonalToDelete(null)
     }
   }
 
-  const handleRestoreSupervisor = async (supervisor: Supervisor) => {
+  const handleRestorePersonal = async (personalItem: Personal) => {
     try {
-      const { error } = await supabase.rpc('restore_supervisor', {
-        p_supervisor_id: supervisor.id
+      console.log('Attempting to restore personal:', personalItem.id)
+      
+      const { data, error } = await supabase.rpc('rpc_restore_supervisor', {
+        id_param: personalItem.id
       })
 
+      console.log('Restore response:', { data, error })
+
       if (error) {
-        console.error('Error restoring supervisor:', error)
-        toast.error('Error al restaurar supervisor: ' + error.message)
+        console.error('Error restoring personal:', error)
+        toast.error('Error al restaurar personal: ' + (error.message || JSON.stringify(error)))
         return
       }
 
-      toast.success('Supervisor restaurado correctamente')
-      loadSupervisores()
+      toast.success('Personal restaurado correctamente')
+      loadPersonal()
     } catch (error) {
-      console.error('Error restoring supervisor:', error)
-      toast.error('Error al restaurar supervisor')
+      console.error('Error restoring personal:', error)
+      toast.error('Error al restaurar personal: ' + (error instanceof Error ? error.message : 'Error desconocido'))
     }
   }
 
   useEffect(() => {
-    loadSupervisores()
+    loadPersonal()
   }, [roleFilter, statusFilter])
 
   const handleSort = (field: SortField) => {
@@ -159,10 +162,10 @@ export function SupervisoresTable() {
       <ChevronDown className="ml-2 h-4 w-4" />
   }
 
-  const sortedAndFilteredSupervisores = supervisores
-    .filter(supervisor => {
-      const matchesSearch = supervisor.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           supervisor.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const sortedAndFilteredPersonal = personal
+    .filter(personalItem => {
+      const matchesSearch = personalItem.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           personalItem.email.toLowerCase().includes(searchTerm.toLowerCase())
       return matchesSearch
     })
     .sort((a, b) => {
@@ -233,7 +236,7 @@ export function SupervisoresTable() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Cargando supervisores...</div>
+    return <div className="flex items-center justify-center h-64">Cargando personal...</div>
   }
 
   return (
@@ -252,14 +255,16 @@ export function SupervisoresTable() {
         
         <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as SupervisorRole | 'all')}>
           <SelectTrigger className="w-full sm:w-48">
-            <Filter className="h-4 w-4 mr-2" />
+            <Filter className="mr-2 h-4 w-4" />
             <SelectValue placeholder="Filtrar por rol" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los roles</SelectItem>
-            {Object.entries(ROLE_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
+            <SelectItem value="SUPERVISOR_LIDER">Supervisor Líder</SelectItem>
+            <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
+            <SelectItem value="MONITOR">Monitor</SelectItem>
+            <SelectItem value="CONDUCTOR">Conductor</SelectItem>
+            <SelectItem value="RESPONSABLE_OIG">Responsable OIG</SelectItem>
           </SelectContent>
         </Select>
 
@@ -345,67 +350,67 @@ export function SupervisoresTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedAndFilteredSupervisores.length === 0 ? (
+            {sortedAndFilteredPersonal.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  No se encontraron supervisores
+                  No se encontró personal
                 </TableCell>
               </TableRow>
             ) : (
-              sortedAndFilteredSupervisores.map((supervisor: Supervisor) => (
-                <TableRow key={supervisor.id}>
-                  <TableCell className="font-medium">{supervisor.nombre}</TableCell>
-                  <TableCell>{supervisor.email}</TableCell>
+              sortedAndFilteredPersonal.map((personalItem: Personal) => (
+                <TableRow key={personalItem.id}>
+                  <TableCell className="font-medium">{personalItem.nombre}</TableCell>
+                  <TableCell>{personalItem.email}</TableCell>
                   <TableCell>
-                    <Badge variant={getRoleBadgeVariant(supervisor.rol)}>
-                      {ROLE_LABELS[supervisor.rol]}
+                    <Badge variant={getRoleBadgeVariant(personalItem.rol)}>
+                      {ROLE_LABELS[personalItem.rol]}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getPermisosBadgeVariant(supervisor.permisos_sistema)}>
-                      {PERMISOS_LABELS[supervisor.permisos_sistema]}
+                    <Badge variant={getPermisosBadgeVariant(personalItem.permisos_sistema)}>
+                      {PERMISOS_LABELS[personalItem.permisos_sistema]}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {supervisor.is_deleted ? (
+                    {personalItem.is_deleted ? (
                       <Badge variant="destructive">Eliminado</Badge>
-                    ) : supervisor.is_active ? (
+                    ) : personalItem.is_active ? (
                       <Badge variant="default">Activo</Badge>
                     ) : (
                       <Badge variant="secondary">Inactivo</Badge>
                     )}
                   </TableCell>
                   <TableCell>
-                    {new Date(supervisor.created_at).toLocaleDateString('es-PE')}
+                    {new Date(personalItem.created_at).toLocaleDateString('es-ES')}
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" className="h-8 w-8 p-0">
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {!supervisor.is_deleted ? (
+                        {!personalItem.is_deleted ? (
                           <>
-                            <DropdownMenuItem onClick={() => setEditingSupervisor(supervisor)}>
-                              <Pencil className="h-4 w-4 mr-2" />
+                            <DropdownMenuItem onClick={() => setEditingPersonal(personalItem)}>
+                              <Pencil className="mr-2 h-4 w-4" />
                               Editar
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => {
-                                setSupervisorToDelete(supervisor)
+                                setPersonalToDelete(personalItem)
                                 setDeleteDialogOpen(true)
                               }}
                               className="text-destructive"
                             >
-                              <Trash2 className="h-4 w-4 mr-2" />
+                              <Trash2 className="mr-2 h-4 w-4" />
                               Eliminar
                             </DropdownMenuItem>
                           </>
                         ) : (
-                          <DropdownMenuItem onClick={() => handleRestoreSupervisor(supervisor)}>
-                            <RotateCcw className="h-4 w-4 mr-2" />
+                          <DropdownMenuItem onClick={() => handleRestorePersonal(personalItem)}>
+                            <RotateCcw className="mr-2 h-4 w-4" />
                             Restaurar
                           </DropdownMenuItem>
                         )}
@@ -419,38 +424,37 @@ export function SupervisoresTable() {
         </Table>
       </div>
 
+      {/* Edit Dialog */}
+      {editingPersonal && (
+        <EditPersonalDialog
+          personal={editingPersonal}
+          open={!!editingPersonal}
+          onOpenChange={(open: boolean) => !open && setEditingPersonal(null)}
+          onSuccess={() => {
+            loadPersonal()
+            setEditingPersonal(null)
+          }}
+        />
+      )}
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar supervisor?</AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar personal?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará al supervisor "{supervisorToDelete?.nombre}" del sistema.
-              El registro se mantendrá en la base de datos pero no podrá acceder al sistema.
-              Esta acción se puede revertir.
+              Esta acción eliminará permanentemente a <strong>{personalToDelete?.nombre}</strong> del sistema.
+              Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteSupervisor} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeletePersonal} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Edit Dialog */}
-      {editingSupervisor && (
-        <EditSupervisorDialog
-          supervisor={editingSupervisor}
-          open={!!editingSupervisor}
-          onOpenChange={(open) => !open && setEditingSupervisor(null)}
-          onSuccess={() => {
-            setEditingSupervisor(null)
-            loadSupervisores()
-          }}
-        />
-      )}
     </div>
   )
 }

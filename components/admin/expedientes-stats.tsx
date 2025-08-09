@@ -31,7 +31,6 @@ interface ExpedientesStatsProps {
 
 export function ExpedientesStats({ expedientes }: ExpedientesStatsProps) {
   const activeExpedientes = expedientes.filter(e => !e.is_deleted)
-  const deletedExpedientes = expedientes.filter(e => e.is_deleted)
   
   const totalAcciones = expedientes.reduce((acc, exp) => 
     acc + (exp.acciones?.length || 0), 0
@@ -62,18 +61,11 @@ export function ExpedientesStats({ expedientes }: ExpedientesStatsProps) {
       description: 'Asignaciones totales',
       icon: Users,
       color: 'text-purple-600'
-    },
-    {
-      title: 'Expedientes Eliminados',
-      value: deletedExpedientes.length,
-      description: 'Expedientes archivados',
-      icon: Archive,
-      color: 'text-gray-600'
     }
   ]
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {stats.map((stat) => {
         const Icon = stat.icon
         return (

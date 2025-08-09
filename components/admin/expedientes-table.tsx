@@ -33,7 +33,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { MoreHorizontal, Edit, Trash2, RotateCcw, Users, Calendar, Eye } from 'lucide-react'
 import { EditExpedienteDialog } from '@/components/admin/edit-expediente-dialog'
-import { AssignSupervisoresDialog } from '@/components/admin/assign-supervisores-dialog'
+import { AssignPersonalDialog } from '@/components/admin/assign-personal-dialog'
 // import { toast } from 'sonner' // Removed for now
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -208,7 +208,7 @@ export function ExpedientesTable({
                 <TableHead>Nombre</TableHead>
                 <TableHead>Creado por</TableHead>
                 <TableHead>Acciones</TableHead>
-                <TableHead>Supervisores</TableHead>
+                <TableHead>Personal</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="w-[70px]"></TableHead>
@@ -284,7 +284,7 @@ export function ExpedientesTable({
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleAssign(expediente)}>
                               <Users className="mr-2 h-4 w-4" />
-                              Asignar Supervisores
+                              Asignar Personal
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -321,13 +321,13 @@ export function ExpedientesTable({
         />
       )}
 
-      {/* Assign Supervisores Dialog */}
+      {/* Assign Personal Dialog */}
       {selectedExpediente && (
-        <AssignSupervisoresDialog
+        <AssignPersonalDialog
           expediente={selectedExpediente}
           open={assignDialogOpen}
           onOpenChange={setAssignDialogOpen}
-          onAssignmentUpdated={onExpedienteUpdated}
+          onAssignmentComplete={onExpedienteUpdated}
         />
       )}
 

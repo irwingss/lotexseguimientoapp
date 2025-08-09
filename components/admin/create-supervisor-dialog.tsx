@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
 type SupervisorRole = 'SUPERVISOR' | 'SUPERVISOR_LIDER' | 'MONITOR' | 'CONDUCTOR' | 'RESPONSABLE_OIG'
-type PermisosSystem = 'ADMIN' | 'SUPERVISOR' | 'MONITOR'
+type PermisosSystem = 'ADMIN' | 'no_ADMIN'
 
 interface CreateSupervisorDialogProps {
   children: React.ReactNode
@@ -29,8 +29,7 @@ const ROLE_OPTIONS: { value: SupervisorRole; label: string }[] = [
 
 const PERMISOS_OPTIONS: { value: PermisosSystem; label: string; description: string }[] = [
   { value: 'ADMIN', label: 'Administrador', description: 'Acceso completo al sistema' },
-  { value: 'SUPERVISOR', label: 'Supervisor', description: 'Acceso a funciones de supervisión' },
-  { value: 'MONITOR', label: 'Monitor', description: 'Acceso básico de monitoreo' }
+  { value: 'no_ADMIN', label: 'Usuario', description: 'Acceso limitado según rol asignado' }
 ]
 
 export function CreateSupervisorDialog({ children, onSuccess }: CreateSupervisorDialogProps) {
@@ -40,7 +39,7 @@ export function CreateSupervisorDialog({ children, onSuccess }: CreateSupervisor
     nombre: '',
     email: '',
     rol: '' as SupervisorRole,
-    permisos_sistema: 'SUPERVISOR' as PermisosSystem,
+    permisos_sistema: 'no_ADMIN' as PermisosSystem,
     is_active: true
   })
 
@@ -85,7 +84,7 @@ export function CreateSupervisorDialog({ children, onSuccess }: CreateSupervisor
         nombre: '',
         email: '',
         rol: '' as SupervisorRole,
-        permisos_sistema: 'SUPERVISOR',
+        permisos_sistema: 'no_ADMIN',
         is_active: true
       })
       
