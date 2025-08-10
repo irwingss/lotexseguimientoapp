@@ -324,7 +324,18 @@ export function ExpedientesTable({
       {/* Assign Personal Dialog */}
       {selectedExpediente && (
         <AssignPersonalDialog
-          expediente={selectedExpediente}
+          expediente={{
+            // Spread base fields
+            ...(selectedExpediente as any),
+            // Normalize assigned supervisors to flat shape expected by dialog
+            supervisores_asignados: (selectedExpediente.supervisores_asignados || []).map((s) => ({
+              id: s.supervisor.id,
+              nombre: s.supervisor.nombre,
+              email: s.supervisor.email,
+              rol: s.supervisor.rol,
+              activo: true,
+            })),
+          } as any}
           open={assignDialogOpen}
           onOpenChange={setAssignDialogOpen}
           onAssignmentComplete={onExpedienteUpdated}

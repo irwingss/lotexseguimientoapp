@@ -7,51 +7,44 @@ import { revalidatePath } from "next/cache";
 import { GeoCapture } from "@/components/work/GeoCapture";
 import { OfflineQueueForm } from "@/components/work/OfflineQueueForm";
 
-// Note: Next.js requires a default export for route segments
 export default async function Page({
-  params,
   searchParams,
 }: {
-  params?: Promise<{ "expediente-id": string }>;
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  // Normalize params/searchParams for Next 14/15 differences (can be Promises)
-  const p: any = params ? await (params as any) : undefined;
+  // Normalize searchParams for Next 14/15 (can be Promise)
   const sp: any = searchParams ? await (searchParams as any) : {};
-  const expedienteId = p?.["expediente-id"]; // UUID
+
   const supabase = await createClient();
-  
-  // Access control: determine ADMIN and selected expediente
-  const { data: isAdmin, error: isAdminErr } = await supabase.rpc("is_admin");
-  const { data: selectedExpedienteId, error: selectedErr } = await supabase.rpc(
+
+  // Access control and selected expediente
+  const { data: isAdmin } = await supabase.rpc("is_admin");
+  const { data: selectedExpedienteId } = await supabase.rpc(
     "rpc_get_expediente_seleccionado"
   );
-  const { data: selectedDetail } = await supabase.rpc(
-    "rpc_get_expediente_seleccionado_detail"
-  );
-  
-  // Gate for non-ADMIN: must match globally selected expediente
-  if (!isAdmin) {
-    if (!selectedExpedienteId) {
-      return (
-        <div className="p-6">
-          <h1 className="text-xl font-semibold">403 • Acceso restringido</h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            No hay un expediente seleccionado globalmente. Pide a un ADMIN que establezca uno.
-          </p>
+  // Fetch basic expediente info for header
+  const { data: selectedDetail } = await supabase
+    .from("expedientes")
+    .select("expediente_codigo,nombre")
+    .eq("id", selectedExpedienteId)
+    .single();
+
+  if (!selectedExpedienteId) {
+    // No seleccionado
+    return (
+      <div className="space-y-6 p-4 md:p-6">
+        <h1 className="text-xl md:text-2xl font-semibold">Detalle de expediente</h1>
+        <div className="text-sm text-muted-foreground">
+          {isAdmin ? (
+            <>
+              No hay expediente seleccionado globalmente. Ve a <a className="underline" href="/admin/seleccion">Admin → Selección</a> para establecerlo.
+            </>
+          ) : (
+            <>No hay expediente seleccionado. Pide a un ADMIN que establezca uno.</>
+          )}
         </div>
-      );
-    }
-    if (selectedExpedienteId !== expedienteId) {
-      return (
-        <div className="p-6">
-          <h1 className="text-xl font-semibold">403 • Acceso restringido</h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Solo puedes acceder al expediente seleccionado globalmente.
-          </p>
-        </div>
-      );
-    }
+      </div>
+    );
   }
 
   // Read filters from URL
@@ -72,14 +65,14 @@ export default async function Page({
   // Fetch counts (puntos)
   const { data: puntosCounts, error: puntosCountsErr } = await supabase.rpc(
     "rpc_get_monitoreo_puntos_counts",
-    { p_expediente_id: expedienteId }
+    { p_expediente_id: selectedExpedienteId }
   );
 
   // Fetch list (puntos)
   const { data: puntos, error: puntosErr } = await supabase.rpc(
     "rpc_get_monitoreo_puntos",
     {
-      p_expediente_id: expedienteId,
+      p_expediente_id: selectedExpedienteId,
       p_locacion: locacion,
       p_estatus_filter: estatus as any, // enum[] on SQL side
       p_search: q,
@@ -91,13 +84,13 @@ export default async function Page({
   // Fetch vuelos (counts + list)
   const { data: vuelosCounts, error: vuelosCountsErr } = await supabase.rpc(
     "rpc_get_vuelos_items_counts",
-    { p_expediente_id: expedienteId }
+    { p_expediente_id: selectedExpedienteId }
   );
 
   const { data: vuelos, error: vuelosErr } = await supabase.rpc(
     "rpc_get_vuelos_items",
     {
-      p_expediente_id: expedienteId,
+      p_expediente_id: selectedExpedienteId,
       p_tipo: null,
       p_search: q,
       p_limit: limit,
@@ -121,15 +114,9 @@ export default async function Page({
             <span className="text-muted-foreground">— {selectedDetail?.nombre}</span>
           ) : null}
         </div>
-        {/* ADMIN helper: show current selected and quick set */}
         {isAdmin ? (
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="text-muted-foreground">
-              Seleccionado global: {selectedExpedienteId ?? "—"}
-            </span>
-            {selectedExpedienteId !== expedienteId && (
-              <SetSeleccionadoForm expedienteId={expedienteId} />
-            )}
+          <div className="text-xs text-muted-foreground">
+            Para cambiar el seleccionado, ve a <a className="underline" href="/admin/seleccion">Admin → Selección</a>.
           </div>
         ) : null}
         {anyError ? (
@@ -180,9 +167,9 @@ export default async function Page({
       {/* Añadir punto (ANADIDO) */}
       <section className="space-y-2">
         <h2 className="text-lg font-medium">Añadir punto</h2>
-        <OfflineQueueForm action={crearAnadidoAction} endpoint="/api/monitoreo/crear-anadido" className="grid grid-cols-1 md:grid-cols-6 gap-3 rounded border p-3" offlineDesc={`crear-anadido:${expedienteId}`}>
-          <input type="hidden" name="expediente_id" value={expedienteId} />
-          <input type="hidden" name="revalidate_path" value={`/expedientes/${expedienteId}`} />
+        <OfflineQueueForm action={crearAnadidoAction} endpoint="/api/monitoreo/crear-anadido" className="grid grid-cols-1 md:grid-cols-6 gap-3 rounded border p-3" offlineDesc={`crear-anadido:${selectedExpedienteId}`}>
+          <input type="hidden" name="expediente_id" value={selectedExpedienteId} />
+          <input type="hidden" name="revalidate_path" value={`/expedientes`} />
           <div className="flex flex-col">
             <label className="text-xs text-muted-foreground">Locación*</label>
             <input name="locacion" className="h-9 rounded border px-2 text-sm" placeholder="L1" required />
@@ -221,7 +208,7 @@ export default async function Page({
         <h2 className="text-lg font-medium">Puntos</h2>
         <PuntosTable 
           rows={puntos ?? []}
-          expedienteId={expedienteId}
+          expedienteId={selectedExpedienteId}
           setMarcadoAction={setMarcadoAction}
           setMonitoreoAction={setMonitoreoAction}
           crearReplanteoAction={crearReplanteoAction}
@@ -233,26 +220,6 @@ export default async function Page({
         <VuelosTab rows={vuelos ?? []} counts={vuelosCounts ?? []} />
       </section>
     </div>
-  );
-}
-
-// Admin-only form to set global selected expediente
-async function setSeleccionadoAction(formData: FormData) {
-  "use server";
-  const p_expediente_id = formData.get("expediente_id") as string | null;
-  if (!p_expediente_id) return;
-  const supabase = await createClient();
-  await supabase.rpc("rpc_set_expediente_seleccionado", { p_expediente_id });
-}
-
-function SetSeleccionadoForm({ expedienteId }: { expedienteId: string }) {
-  return (
-    <form action={setSeleccionadoAction} className="inline-flex items-center gap-2">
-      <input type="hidden" name="expediente_id" value={expedienteId} />
-      <button type="submit" className="h-8 px-3 rounded bg-emerald-600 text-white text-xs hover:bg-emerald-700">
-        Establecer como seleccionado
-      </button>
-    </form>
   );
 }
 
@@ -269,7 +236,6 @@ async function setMarcadoAction(formData: FormData) {
     return;
   }
   const supabase = await createClient();
-  // If DESCARTADO requires motivo; backend also enforces via checks/triggers
   const update: Record<string, any> = { marcado_status: status };
   update["marcado_motivo"] = status === "DESCARTADO" ? motivo ?? "" : null;
   const { error } = await supabase
@@ -277,7 +243,6 @@ async function setMarcadoAction(formData: FormData) {
     .update(update)
     .eq("id", puntoId);
   if (error) {
-    // Surface error via console on server; UI will refresh regardless
     console.error("setMarcadoAction error", error.message);
   }
   revalidatePath(revalidate_path);
@@ -298,7 +263,6 @@ async function setMonitoreoAction(formData: FormData) {
   const update: Record<string, any> = { monitoreado_status: status };
   update["monitoreado_motivo"] = status === "DESCARTADO" ? motivo ?? "" : null;
   if (status === "HECHO") {
-    // If provided, set accion_id; otherwise leave null to auto-assign by trigger
     update["monitoreado_accion_id"] = accionId ?? null;
   } else {
     update["monitoreado_accion_id"] = null;
@@ -310,7 +274,7 @@ async function setMonitoreoAction(formData: FormData) {
   if (error) {
     console.error("setMonitoreoAction error", error.message);
   }
-  revalidatePath("/expedientes");
+  revalidatePath(revalidate_path);
 }
 
 // Server actions: crear REPLANTEO / ANADIDO

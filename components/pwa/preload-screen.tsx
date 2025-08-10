@@ -213,7 +213,7 @@ export function PreloadScreen({ onComplete, userEmail }: PreloadScreenProps) {
                 </div>
               </div>
 
-              {cacheStats.total > 0 && (
+              {(cacheStats.assignments + cacheStats.points + cacheStats.mutations) > 0 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h4 className="text-sm font-medium text-blue-800 mb-2">Datos en caché</h4>
                   <div className="text-xs text-blue-700 space-y-1">

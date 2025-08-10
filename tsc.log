@@ -1,0 +1,13 @@
+.next/types/app/admin/seleccion/page.ts(34,29): error TS2344: Type '{ searchParams: { [key: string]: string | string[] | undefined; } | Promise<{ [key: string]: string | string[] | undefined; }>; }' does not satisfy the constraint 'PageProps'.
+  Types of property 'searchParams' are incompatible.
+    Type '{ [key: string]: string | string[] | undefined; } | Promise<{ [key: string]: string | string[] | undefined; }>' is not assignable to type 'Promise<any> | undefined'.
+      Type '{ [key: string]: string | string[] | undefined; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/expedientes/[expediente-id]/page.ts(34,29): error TS2344: Type '{ params: { "expediente-id": string; }; searchParams: { [key: string]: string | string[] | undefined; }; }' does not satisfy the constraint 'PageProps'.
+  Types of property 'params' are incompatible.
+    Type '{ "expediente-id": string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+components/admin/expedientes-table.tsx(327,11): error TS2719: Type 'Expediente' is not assignable to type 'Expediente'. Two different types with this name exist, but they are unrelated.
+  Types of property 'supervisores_asignados' are incompatible.
+    Type '{ supervisor: { id: string; nombre: string; email: string; rol: string; }; }[] | undefined' is not assignable to type '{ id: string; nombre: string; email: string; rol: string; activo: boolean; }[] | undefined'.
+      Type '{ supervisor: { id: string; nombre: string; email: string; rol: string; }; }[]' is not assignable to type '{ id: string; nombre: string; email: string; rol: string; activo: boolean; }[]'.
+        Type '{ supervisor: { id: string; nombre: string; email: string; rol: string; }; }' is missing the following properties from type '{ id: string; nombre: string; email: string; rol: string; activo: boolean; }': id, nombre, email, rol, activo
+components/pwa/preload-screen.tsx(216,27): error TS2339: Property 'total' does not exist on type '{ assignments: number; points: number; mutations: number; }'.
