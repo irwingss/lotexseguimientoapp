@@ -1,0 +1,175 @@
+# UI Specifications for Dashboard and Frontend Improvements
+# version: 0.1.0
+# owner: frontend
+# updated: 2025-08-09
+
+meta:
+  name: "UI Specs - Dashboard"
+  version: "0.1.0"
+  last_updated: "2025-08-09"
+  status: "draft"
+  notes:
+    - "No modificar UI existente; este documento guía mejoras futuras."
+    - "Cumplir reglas Next.js App Router (RSC prioritario), Tailwind + shadcn/ui."
+    - "RLS en Supabase siempre aplicada; UI solo consume RPCs o vistas seguras."
+
+alcance:
+  en_escena:
+    - "Página de inicio '/' post-login: dashboard del expediente seleccionado."
+    - "KPIs y gráficos de avance y evolución temporal."
+    - "Alertas de progreso para actuar a tiempo."
+  fuera_de_escena:
+    - "Cambios de esquema DB directos (se harán vía MCP + migraciones)."
+    - "Cambios de navegación global fuera del dashboard."
+
+control_acceso:
+  descripcion: "Solo usuarios autenticados con email presente/activo en 'supervisores' y con expediente seleccionado."
+  gating:
+    - "Verificación Supabase Auth."
+    - "Validación en tabla 'supervisores' (activo)."
+    - "Uso de RPC existente para expediente seleccionado: rpc_get_expediente_seleccionado_detail."
+
+ruta:
+  path: "/"
+  modelo_componentes:
+    tipo: "RSC-first"
+    obtencion_datos:
+      - "Lectura de métricas vía RPC(s) en el servidor."
+      - "React Server Components + Suspense."
+    componentes_cliente:
+      - "Wrappers pequeños para interactividad (tabs/filtros, charts)."
+
+fuentes_datos:
+  tablas:
+    - "public.monitoreo_puntos"
+    - "public.vuelos_items"
+  notas:
+    - "Respetar RLS; no exponer claves."
+
+kpis:
+  expediente_contexto:
+    fuente: "rpc_get_expediente_seleccionado_detail"
+    campo_clave: "expediente_id"
+  lista:
+    - id: "total_locaciones"
+      titulo: "N° de Locaciones"
+      definicion: "Conteo de locaciones únicas asociadas al expediente en 'monitoreo_puntos'."
+      formula: "count(distinct locacion) where expediente_id = :expediente_id and deleted_at is null"
+      notas:
+        - "Confirmar nombre exacto de columna 'locacion' en 'monitoreo_puntos'."
+    - id: "total_puntos_monitoreo"
+      titulo: "N° de Puntos de Monitoreo"
+      definicion: "Total de filas en 'monitoreo_puntos' para el expediente."
+      formula: "count(*) where expediente_id = :expediente_id and deleted_at is null"
+    - id: "total_pafs"
+      titulo: "N° de PAFs"
+      definicion: "Total de filas en 'vuelos_items' con vuelo_tipo = 'PAF' para el expediente."
+      formula: "count(*) where expediente_id = :expediente_id and vuelo_tipo = 'PAF' and deleted_at is null"
+      notas:
+        - "El usuario mencionó 'PUNTO DE CONTROL'; confirmar mapeo a 'PAF'."
+    - id: "total_puntos_despegue"
+      titulo: "N° de Puntos de Despegue"
+      definicion: "Total de filas en 'vuelos_items' con vuelo_tipo = 'PD' para el expediente."
+      formula: "count(*) where expediente_id = :expediente_id and vuelo_tipo = 'PD' and deleted_at is null"
+    - id: "total_checkpoints"
+      titulo: "N° de Checkpoints"
+      definicion: "Total de filas en 'vuelos_items' con vuelo_tipo = 'CHECKPOINT' para el expediente."
+      formula: "count(*) where expediente_id = :expediente_id and vuelo_tipo = 'CHECKPOINT' and deleted_at is null"
+    - id: "locaciones_marcadas"
+      titulo: "N° Locaciones completamente marcadas"
+      definicion: "Locaciones cuya totalidad de puntos están marcados (completado)."
+      enfoque:
+        - "Para cada locacion: si 100% de sus puntos tienen marcado_status = 'HECHO', contar."
+      salidas: ["conteo", "porcentaje_sobre_total_locaciones"]
+      notas:
+        - "Confirmar campo/enum exacto para marcado_status."
+    - id: "locaciones_monitoreadas"
+      titulo: "N° Locaciones completamente monitoreadas"
+      definicion: "Locaciones cuya totalidad de puntos están monitoreados."
+      salidas: ["conteo", "porcentaje_sobre_total_locaciones"]
+    - id: "puntos_marcados"
+      titulo: "N° puntos marcados"
+      definicion: "Conteo de puntos con marcado completado y su porcentaje."
+      salidas: ["conteo", "porcentaje_sobre_total_puntos"]
+    - id: "puntos_monitoreados"
+      titulo: "N° puntos monitoreados"
+      definicion: "Conteo de puntos con monitoreo completado y su porcentaje."
+      salidas: ["conteo", "porcentaje_sobre_total_puntos"]
+    - id: "resumen_estatus"
+      titulo: "Resumen por estatus de puntos"
+      definicion: "Recuento por 'punto_estatus' (PENDIENTE, MARCADO, MONITOREADO, MARCADO_Y_MONITOREADO, DESCARTADO, REPLANTEADO, ANADIDO) y cuántos de esos ya monitoreados."
+      salidas: ["conteos_por_estatus", "conteos_monitoreados_por_estatus"]
+
+charts:
+  series_temporales:
+    - id: "ts_marcado"
+      titulo: "Evolución Marcado"
+      metrica: "puntos marcados por día/semana"
+      granularidad: ["day", "week"]
+    - id: "ts_monitoreo"
+      titulo: "Evolución Monitoreo"
+      metrica: "puntos monitoreados por día/semana"
+  distribucion:
+    - id: "dist_estatus"
+      titulo: "Distribución por estatus"
+      metrica: "porcentaje por 'punto_estatus'"
+  notas:
+    - "No agregar dependencias nuevas sin ADR (Chart.js/Recharts/visx)."
+
+rpc_propuestas:
+  - nombre: "rpc_dashboard_metrics"
+    estado: "propuesto"
+    args:
+      - { nombre: "expediente_id", tipo: "uuid" }
+      - { nombre: "desde", tipo: "date?" }
+      - { nombre: "hasta", tipo: "date?" }
+    retorna: "jsonb"
+    shape:
+      total_locaciones: number
+      total_puntos_monitoreo: number
+      total_pafs: number
+      total_puntos_despegue: number
+      total_checkpoints: number
+      locaciones_marcadas: { count: number, pct: number }
+      locaciones_monitoreadas: { count: number, pct: number }
+      puntos_marcados: { count: number, pct: number }
+      puntos_monitoreados: { count: number, pct: number }
+      resumen_estatus: { [estatus: string]: { total: number, monitoreados: number } }
+      series:
+        marcado: { date: string, count: number }[]
+        monitoreo: { date: string, count: number }[]
+
+ui_componentes:
+  layout:
+    - "Grid responsivo con tarjetas KPI arriba, gráficos abajo."
+    - "shadcn/ui: Card, Badge, Skeleton, Tabs, Tooltip, Separator."
+  estados:
+    loading: "Skeletons en tarjetas y placeholders de gráficos."
+    empty: ["Mensaje cuando expediente no tiene datos."]
+    error: ["Callout con retry (server action)."]
+
+rendimiento:
+  objetivos:
+    ttfb_ms: 300
+    lcp_s: 2.5
+    total_js_kb: 180
+  tacticas:
+    - "RSC para datos + streaming."
+    - "Suspense con fallbacks mínimos."
+    - "Sin librerías pesadas hasta ADR."
+
+accesibilidad:
+  - "Contraste AA en tarjetas y gráficos."
+  - "Etiquetas ARIA en gráficos y KPIs."
+  - "Navegación por teclado."
+
+criterios_aceptacion:
+  - "Ruta '/' muestra KPIs y gráficos para expediente seleccionado."
+  - "Cifras coinciden con consultas verificadas (MCP en DB)."
+  - "Sin dependencias nuevas sin ADR."
+  - "RLS respetada: usuarios ven solo sus expedientes."
+
+preguntas_abiertas:
+  - "Confirmar mapeo exacto: 'PUNTO DE CONTROL' -> 'PAF'."
+  - "Confirmar existencia/nombre exacto de columna 'locacion' en 'monitoreo_puntos'."
+  - "Definir umbrales para alertas (p.ej., atraso > X% vs plan)."

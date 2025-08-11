@@ -1,0 +1,107 @@
+# UI Implementation Plan
+# version: 0.1.0
+# owner: frontend
+# updated: 2025-08-09
+
+objetivo:
+  descripcion: "Plan detallado para implementar el dashboard en '/' con KPIs, series temporales y alertas, sin modificar el UI actual hasta aprobación."
+
+restricciones:
+  - "Next.js App Router con RSC prioritario; 'use client' solo donde sea necesario."
+  - "Stack fijo: Next.js (TS) + Tailwind + shadcn/ui + Supabase (RLS)."
+  - "No introducir dependencias sin ADR."
+  - "PWA: mantener instalación obligatoria MOBILE_ONLY."
+  - "Respetar RLS, triggers y soft delete definidos en specs."
+
+suposiciones:
+  - "Existe RPC para obtener expediente seleccionado: rpc_get_expediente_seleccionado_detail."
+  - "Enums actualizados: vuelo_tipo incluye CHECKPOINT."
+  - "Tablas: public.monitoreo_puntos, public.vuelos_items con expediente_id y soft delete."
+
+entregables:
+  - "ui_specs_.yaml (este repo, raíz)."
+  - "ui_plan.yaml (este repo, raíz)."
+  - "Propuesta de RPC(s) en /database como migraciones (posterior)."
+  - "Página '/' implementada (RSC) con KPIs y gráficos (pendiente ADR para charts)."
+  - "Docs en /docs: 11-Dashboard-Metricas.md (SS&T Gate)."
+
+hitos:
+  - id: H1
+    nombre: "Especificación y Plan"
+    tareas:
+      - "A1. Crear ui_specs_.yaml con KPIs/series y contratos RPC."
+      - "A2. Crear ui_plan.yaml con fases, DoD, SS&T."
+    dod:
+      - "Ambos archivos en raíz, revisados."
+  - id: H2
+    nombre: "Diseño de RPC y verificación DB"
+    tareas:
+      - "B1. Definir rpc_dashboard_metrics (args/shape) en /database/03_functions_and_triggers.sql (borrador)."
+      - "B2. Validar mapeos (PAF/PD/CHECKPOINT; columna locacion) vía MCP en Supabase."
+      - "B3. Probar consultas de conteo en DB (MCP) y anotar en docs."
+    dod:
+      - "Consultas verificadas y shape final acordado."
+  - id: H3
+    nombre: "Implementación Backend (MCP)"
+    tareas:
+      - "C1. Crear migración para rpc_dashboard_metrics con RLS segura."
+      - "C2. Tests básicos de rendimiento de la RPC."
+    dod:
+      - "RPC desplegada y validada en proyecto Supabase."
+  - id: H4
+    nombre: "Implementación Frontend (RSC)"
+    tareas:
+      - "D1. Crear contenedor de página en 'app/page.tsx' (RSC)."
+      - "D2. Tarjetas KPI (shadcn/ui Card) con Skeletons (Suspense)."
+      - "D3. Gráficos: seleccionar librería mediante ADR; implementar wrappers cliente mínimos."
+      - "D4. Estados empty/error y accesibilidad."
+    dod:
+      - "Dashboard renderiza datos reales del expediente seleccionado."
+  - id: H5
+    nombre: "QA, Performance y A11y"
+    tareas:
+      - "E1. Validar cifras vs consultas directas (MCP)."
+      - "E2. Medir TTFB/LCP/JS footprint; optimizar si necesario."
+      - "E3. Revisión a11y (teclado, ARIA, contraste)."
+    dod:
+      - "Métricas dentro de objetivos y a11y básico cumplido."
+  - id: H6
+    nombre: "Documentación y Release"
+    tareas:
+      - "F1. Crear /docs/11-Dashboard-Metricas.md con consultas y capturas."
+      - "F2. Actualizar README si aplica."
+      - "F3. PR con checklist SS&T Gate."
+    dod:
+      - "Docs actualizadas y PR aprobado."
+
+ss_t_gate:
+  - "Actualizar /docs según fase."
+  - "No cerrar PR sin verificación MCP de cifras."
+
+riesgos:
+  - "Discrepancias de nomenclatura ('locacion', tipos vuelo)."
+  - "Rendimiento de la RPC si se hace join pesado."
+  - "Dependencia de librería de gráficos sin ADR."
+
+mitigaciones:
+  - "Validar columnas exactas vía MCP antes de implementar."
+  - "Indices adecuados y agregaciones precomputadas si aplica."
+  - "ADR para librería de gráficos con criterios de peso y DX."
+
+plan_validacion:
+  pasos:
+    - "Usar MCP para ejecutar consultas de control y comparar con UI."
+    - "Tests de borde: expediente sin datos, con miles de puntos, RLS de usuario no ADMIN."
+
+cronograma:
+  relativo:
+    H1: "Día 0-1"
+    H2: "Día 1-2"
+    H3: "Día 2-3"
+    H4: "Día 3-5"
+    H5: "Día 5-6"
+    H6: "Día 6"
+
+notas:
+  - "No modificar UI actual hasta aprobación explícita basándose en ui_specs_.yaml."
+  - "Despliegue a Vercel tras revisión y verificación de datos."

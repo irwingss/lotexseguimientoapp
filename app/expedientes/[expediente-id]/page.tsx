@@ -4,6 +4,7 @@ import { ExpedienteWorkHeader } from "@/components/work/ExpedienteWorkHeader";
 import { PuntosTable } from "@/components/work/PuntosTable";
 import { VuelosTab } from "@/components/work/VuelosTab";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { GeoCapture } from "@/components/work/GeoCapture";
 import { OfflineQueueForm } from "@/components/work/OfflineQueueForm";
 
@@ -15,6 +16,8 @@ export default async function Page({
   params?: Promise<{ "expediente-id": string }>;
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  "use server";
+  redirect("/expedientes");
   // Normalize params/searchParams for Next 14/15 differences (can be Promises)
   const p: any = params ? await (params as any) : undefined;
   const sp: any = searchParams ? await (searchParams as any) : {};
@@ -134,7 +137,7 @@ export default async function Page({
         ) : null}
         {anyError ? (
           <p className="text-sm text-red-600">
-            Error cargando datos: {anyError.message}
+            Error cargando datos: {anyError?.message}
           </p>
         ) : null}
         <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando resumen…</div>}>

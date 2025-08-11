@@ -56,7 +56,7 @@ enums:
   permisos_sistema: [ADMIN, no_ADMIN]
   status_trabajo: [PENDIENTE, HECHO, DESCARTADO]
   punto_estatus: [PENDIENTE, MARCADO, MONITOREADO, MARCADO_Y_MONITOREADO, DESCARTADO, REPLANTEADO, ANADIDO]
-  vuelo_tipo: [PAF, PD]
+  vuelo_tipo: [PAF, PD, CHECKPOINT]
   asignacion_target: [LOCACION, PUNTO_MONITOREO, VUELO_ITEM]
   actividad_tipo: [MARCAR, MONITOREAR, VOLAR]
 

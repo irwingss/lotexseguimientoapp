@@ -74,7 +74,10 @@ function startGlobalListener() {
   });
 }
 
-export function OfflineQueueForm({ action, className, children, offlineDesc, endpoint }: Props) {
+export const OfflineQueueForm = React.forwardRef<HTMLFormElement, Props>(function OfflineQueueForm(
+  { action, className, children, offlineDesc, endpoint }: Props,
+  ref
+) {
   const formRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
@@ -89,7 +92,11 @@ export function OfflineQueueForm({ action, className, children, offlineDesc, end
 
   return (
     <form
-      ref={formRef}
+      ref={(node) => {
+        formRef.current = node;
+        if (typeof ref === "function") ref(node as HTMLFormElement);
+        else if (ref && typeof (ref as any) === "object") (ref as React.MutableRefObject<HTMLFormElement | null>).current = node;
+      }}
       action={action as any}
       method="post"
       className={className}
@@ -122,4 +129,4 @@ export function OfflineQueueForm({ action, className, children, offlineDesc, end
       {children}
     </form>
   );
-}
+});

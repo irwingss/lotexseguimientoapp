@@ -6,6 +6,7 @@ import { VuelosTab } from "@/components/work/VuelosTab";
 import { revalidatePath } from "next/cache";
 import { GeoCapture } from "@/components/work/GeoCapture";
 import { OfflineQueueForm } from "@/components/work/OfflineQueueForm";
+import { BulkLocacionActions } from "@/components/work/BulkLocacionActions";
 
 export default async function Page({
   searchParams,
@@ -121,7 +122,7 @@ export default async function Page({
         ) : null}
         {anyError ? (
           <p className="text-sm text-red-600">
-            Error cargando datos: {anyError.message}
+            Error cargando datos: {anyError?.message}
           </p>
         ) : null}
         <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando resumen…</div>}>
@@ -162,6 +163,9 @@ export default async function Page({
           </div>
           <button type="submit" className="h-9 px-4 rounded bg-primary text-primary-foreground text-sm">Aplicar</button>
         </form>
+
+        {/* Acciones masivas por locación */}
+        <BulkLocacionActions expedienteId={selectedExpedienteId} />
       </header>
 
       {/* Añadir punto (ANADIDO) */}
