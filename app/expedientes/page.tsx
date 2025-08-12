@@ -33,7 +33,7 @@ export default async function Page({
   if (!selectedExpedienteId) {
     // No seleccionado
     return (
-      <div className="space-y-6 p-4 md:p-6">
+      <div className="space-y-6 pl-[calc(env(safe-area-inset-left)+16px)] pr-[calc(env(safe-area-inset-right)+16px)] sm:pl-0 sm:pr-0 max-w-screen-2xl mx-auto">
         <h1 className="text-xl md:text-2xl font-semibold">Detalle de expediente</h1>
         <div className="text-sm text-muted-foreground">
           {isAdmin ? (
@@ -102,7 +102,7 @@ export default async function Page({
   const anyError = puntosCountsErr || puntosErr || vuelosCountsErr || vuelosErr;
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6 pl-[calc(env(safe-area-inset-left)+16px)] pr-[calc(env(safe-area-inset-right)+16px)] sm:pl-0 sm:pr-0 max-w-screen-2xl mx-auto">
       <header className="space-y-4">
         <h1 className="text-xl md:text-2xl font-semibold">Detalle de expediente</h1>
         {/* Global badge visible to all */}

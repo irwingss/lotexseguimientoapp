@@ -66,7 +66,7 @@ export default async function RootLayout({
                   {selectedDetail?.nombre ? ` — ${selectedDetail?.nombre}` : ''}
                 </span>
               </div>
-              <div className="flex items-center justify-start sm:justify-end gap-1">
+              <div className="flex items-center justify-start sm:justify-end gap-2">
                 {isAdmin && (
                   <>
                     <Button
@@ -78,7 +78,7 @@ export default async function RootLayout({
                     >
                       <Link href="/" prefetch>
                         <Home className="h-4 w-4" />
-                        <span className="hidden md:inline ml-1">Inicio</span>
+                        <span className="inline ml-1.5 lg:ml-2 text-xs md:text-sm whitespace-nowrap">Inicio</span>
                       </Link>
                     </Button>
                     <Button
@@ -90,7 +90,7 @@ export default async function RootLayout({
                     >
                       <Link href="/admin" prefetch>
                         <LayoutDashboard className="h-4 w-4" />
-                        <span className="hidden md:inline ml-1">Admin</span>
+                        <span className="inline ml-1.5 lg:ml-2 text-xs md:text-sm whitespace-nowrap">Admin</span>
                       </Link>
                     </Button>
                   </>

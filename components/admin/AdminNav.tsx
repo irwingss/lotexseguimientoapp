@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MobileAdminSidebar } from "./MobileAdminSidebar";
 
 export function AdminNav() {
   const items = [
@@ -10,16 +11,21 @@ export function AdminNav() {
   ];
 
   return (
-    <nav className="w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <nav className="w-full border-b bg-background shadow-sm">
       <div className="max-w-screen-2xl mx-auto pl-[calc(env(safe-area-inset-left)+16px)] pr-[calc(env(safe-area-inset-right)+16px)] sm:px-6 lg:px-8 py-2">
-        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 sm:items-center">
+        {/* Mobile: hamburger + slide-over sidebar */}
+        <div className="md:hidden">
+          <MobileAdminSidebar items={items} />
+        </div>
+        {/* Desktop: inline nav */}
+        <div className="hidden md:flex items-center justify-between">
           <Link href="/admin" className="font-semibold text-sm">Admin</Link>
-          <div className="flex items-center gap-3 text-xs md:text-sm overflow-x-auto">
+          <div className="flex items-center gap-4 text-sm">
             {items.map((it) => (
               <Link
                 key={it.href}
                 href={it.href}
-                className="text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 {it.label}
               </Link>
