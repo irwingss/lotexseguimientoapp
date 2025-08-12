@@ -124,3 +124,42 @@ reset role;
 - ✅ Admin role has appropriate privileges
 - ✅ JWT email validation implemented
 - ✅ Security functions are SECURITY DEFINER
+
+---
+
+## Fase 9 — Vuelos Avance (RLS específico)
+
+### Tabla `public.vuelos_items`
+- __Gatekeeper__: ✅ Política base aplicada.
+- __SELECT__: Permitido a `ADMIN` o supervisores asignados al `expediente_id` vía `expediente_supervisores`, y solo registros `is_deleted=false`.
+- __UPDATE__: Mismas condiciones que SELECT. Trigger `f_enforce_vuelos_update_columns` restringe a no-ADMIN a modificar solo columnas de avance (`marcado_*`, `volado_*`) y captura (`captura_*`).
+- __INSERT__: Solo `ADMIN` (importación de Excel). 
+- __DELETE__: Bloqueado (usar soft-delete vía RPC).
+
+### RPCs (Security Definer)
+- `rpc_set_vuelo_marcado(...)`, `rpc_set_vuelo_volado(...)`:
+  - Verifican que el item no esté `is_deleted` y que el usuario sea `ADMIN` o esté asignado al expediente.
+  - Validan `motivo` cuando `status=DESCARTADO`.
+  - Registran auditoría de evento (`VUELO_SET_MARCADO` / `VUELO_SET_VOLADO`).
+- `rpc_soft_delete_vuelo_item(...)`, `rpc_restore_vuelo_item(id)`:
+  - Exclusivo `ADMIN`.
+  - Requieren/guardan metadatos de eliminación (geom, precisión, razón).
+  - Auditoría completa de soft delete/restore.
+
+### Pruebas sugeridas (psql)
+```sql
+-- Usuario asignado (no ADMIN) debería poder UPDATE de avance
+set request.jwt.claims to '{"email": "supervisor@oefa.gob.pe"}';
+select public.rpc_set_vuelo_marcado('00000000-0000-0000-0000-000000000000', 'HECHO');
+
+-- Usuario no asignado debería FALLAR
+set request.jwt.claims to '{"email": "otro@oefa.gob.pe"}';
+select public.rpc_set_vuelo_marcado('00000000-0000-0000-0000-000000000000', 'HECHO');
+
+-- ADMIN puede soft-delete/restore
+set request.jwt.claims to '{"email": "admin@oefa.gob.pe"}';
+select public.rpc_soft_delete_vuelo_item('00000000-0000-0000-0000-000000000000', null, null, 'corrección');
+select public.rpc_restore_vuelo_item('00000000-0000-0000-0000-000000000000');
+reset role;
+```
+

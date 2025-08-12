@@ -1,5 +1,43 @@
 # Changelog - OEFA Lote X
 
+## [Phase 9] - 2025-08-12 - 🔎 READY FOR CLOSURE
+
+### 🎯 Objective: Vuelos Avance (marcado/volado)
+
+### ✅ Added
+- __HTTP API Endpoints__
+  - `app/api/vuelos/marcado/route.ts` → `POST /api/vuelos/marcado`
+  - `app/api/vuelos/volado/route.ts` → `POST /api/vuelos/volado`
+  - `app/api/vuelos/soft-delete/route.ts` → `POST /api/vuelos/soft-delete` (ADMIN)
+  - `app/api/vuelos/restore/route.ts` → `POST /api/vuelos/restore` (ADMIN)
+  - Validación: `motivo` requerido cuando `status=DESCARTADO`. Campos de geocaptura reservados.
+- __UI__
+  - `components/work/VueloAvanceActions.tsx`: Botones de `marcado`/`volado` con soporte offline y prompt de motivo.
+  - Integrado en `VuelosTab` como columna “Acciones”.
+- __Offline Queue__
+  - Integración con `OfflineQueueForm` para encolar mutaciones offline y flush automático al reconectar.
+- __Docs__
+  - `docs/04-API-RPC.md`: Sección Vuelos Avance (RPCs + Endpoints HTTP) con ejemplos de `curl`.
+  - `docs/02-DB-Schema.md`: Campos de avance/captura, triggers, índices y soft delete en `vuelos_items`.
+  - `docs/03-RLS-Matrix.md`: RLS específico de `vuelos_items` y restricciones ADMIN.
+  - `docs/06-Frontend-UI.md`: UI `VueloAvanceActions` + flujo de interacción.
+  - `docs/07-Offline-PWA.md`: Cola offline para `/api/vuelos/*` y pruebas manuales.
+
+### 🔒 Security & Access Control
+- RLS: SELECT/UPDATE permitido a `ADMIN` o supervisores asignados al expediente (solo `is_deleted=false`).
+- Soft delete/restore exclusivo `ADMIN` vía `rpc_soft_delete_vuelo_item` y `rpc_restore_vuelo_item`.
+- RPCs `rpc_set_vuelo_marcado/volado` con `SECURITY DEFINER`, validación de `motivo` y auditoría.
+- Triggers: `f_enforce_vuelos_update_columns` limita columnas modificables para no-ADMIN; auditoría de cambios de avance/captura.
+
+### 🧪 Testing
+- Cambios de estado `HECHO` y `DESCARTADO` (con `motivo`) en online/offline.
+- Denegación por RLS cuando usuario no asignado.
+- Soft delete y restore (ADMIN) con auditoría.
+- Flush de cola al reconectar y verificación de respuestas `{ ok: true }`.
+
+### 📌 Status
+- Implementación estable y documentada. Lista para validación final DoD/SS&T y cierre de fase.
+
 ## [Phase 8 & 8b] - 2025-08-11 - 🔎 READY FOR CLOSURE
 
 ### 🎯 Objective: Avance de monitoreo y Acciones por locación

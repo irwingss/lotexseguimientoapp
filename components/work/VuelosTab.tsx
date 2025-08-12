@@ -1,3 +1,5 @@
+import { VueloAvanceActions } from '@/components/work/VueloAvanceActions'
+
 type VueloRow = {
   id: string
   item: number | null
@@ -36,6 +38,7 @@ export function VuelosTab({ rows, counts }: { rows: VueloRow[]; counts: VueloCou
                 <th className="px-3 py-2 text-left">Marcado</th>
                 <th className="px-3 py-2 text-left">Volado</th>
                 <th className="px-3 py-2 text-left">Actualizado</th>
+                <th className="px-3 py-2 text-left">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -47,6 +50,9 @@ export function VuelosTab({ rows, counts }: { rows: VueloRow[]; counts: VueloCou
                   <td className="px-3 py-2">{r.marcado_status}</td>
                   <td className="px-3 py-2">{r.volado_status}</td>
                   <td className="px-3 py-2">{formatDateTime(r.updated_at)}</td>
+                  <td className="px-3 py-2">
+                    <VueloAvanceActions vueloId={r.id} />
+                  </td>
                 </tr>
               ))}
             </tbody>

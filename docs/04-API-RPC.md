@@ -415,3 +415,98 @@ Pruebas manuales para `/api/monitoreo/bulk-marcado` y `/api/monitoreo/bulk-monit
   - En `/expedientes`, activar modo offline en DevTools.
   - Enviar formulario en `BulkLocacionActions`.
   - Esperado: acción encolada localmente; al volver online, se envía automáticamente.
+
+## Vuelos Avance (RPCs y Endpoints HTTP)
+
+### RPCs
+
+#### `rpc_set_vuelo_marcado(p_vuelo_id, p_status, p_motivo?, p_captura_geom?, p_captura_precision?, p_captura_fuente?)`
+- **Propósito**: Actualiza el avance de marcado de un item de vuelo.
+- **Parámetros**:
+  - `p_vuelo_id` (uuid) — requerido
+  - `p_status` (`status_trabajo`) — `PENDIENTE` | `HECHO` | `DESCARTADO`
+  - `p_motivo` (text, opcional) — requerido si `p_status=DESCARTADO`
+  - `p_captura_geom` (geometry(Point, 4326), opcional) — captura geográfica (actualmente puede enviarse `NULL`)
+  - `p_captura_precision` (double precision, opcional)
+  - `p_captura_fuente` (text, opcional) — e.g., `MANUAL`, `GPS`
+- **Validaciones**:
+  - Verifica existencia del vuelo y que no esté soft-deleted
+  - Requiere asignación al expediente o rol `ADMIN`
+  - Obliga `p_motivo` cuando `p_status=DESCARTADO`
+- **Auditoría**: Evento `VUELO_SET_MARCADO`
+- **Retorna**: `jsonb` `{ "success": true }`
+
+#### `rpc_set_vuelo_volado(p_vuelo_id, p_status, p_motivo?, p_captura_geom?, p_captura_precision?, p_captura_fuente?)`
+- Igual a `rpc_set_vuelo_marcado` pero aplica a los campos de volado.
+- **Auditoría**: Evento `VUELO_SET_VOLADO`
+
+#### `rpc_soft_delete_vuelo_item(id_param, geom4326_param, precision_m_param, reason_param)`
+- **Propósito**: Soft delete de un item de vuelo.
+- **Seguridad**: Solo `ADMIN`.
+- **Auditoría**: Evento `SOFT_DELETE_VUELO_ITEM`
+- **Retorna**: `jsonb` `{ success, message }`
+
+#### `rpc_restore_vuelo_item(id_param)`
+- **Propósito**: Restaurar item de vuelo eliminado lógicamente.
+- **Seguridad**: Solo `ADMIN`.
+- **Retorna**: `jsonb` `{ success, message }`
+
+---
+
+## Endpoints HTTP (Vuelos)
+
+### POST /api/vuelos/marcado
+- **Forma**: `multipart/form-data`
+- **Campos**:
+  - `vuelo_id` (uuid) — requerido
+  - `status` (text) — `PENDIENTE` | `HECHO` | `DESCARTADO`
+  - `motivo` (text) — requerido si `status=DESCARTADO`
+  - `precision` (number, opcional)
+  - `fuente` (text, opcional)
+  - `lat`, `lon` (opcionales; captura geográfica reservada, por ahora se envía `null`)
+- **Seguridad**:
+  - Autenticación Supabase requerida
+  - Asignado al expediente del vuelo o `ADMIN` (validado en RPC y RLS)
+- **Respuesta**:
+  - Éxito: `{ ok: true, data: { success: true } }`
+  - Error validación: `400` con `{ error }`
+- **Ejemplos**:
+```bash
+curl -X POST \
+  -F vuelo_id=11111111-1111-1111-1111-111111111111 \
+  -F status=HECHO \
+  http://localhost:3000/api/vuelos/marcado
+
+curl -X POST \
+  -F vuelo_id=11111111-1111-1111-1111-111111111111 \
+  -F status=DESCARTADO \
+  -F motivo="Base inaccesible" \
+  http://localhost:3000/api/vuelos/marcado
+```
+
+### POST /api/vuelos/volado
+- Igual a `/api/vuelos/marcado`, invoca `rpc_set_vuelo_volado`.
+
+### POST /api/vuelos/soft-delete (ADMIN)
+- **Campos**:
+  - `id` (uuid) — id del item de vuelo
+  - `reason` (text, opcional)
+  - `precision` (number, opcional)
+  - `lat`, `lon` (opcionales; `geom` reservado)
+- **Respuesta**: `{ ok: true, data: { success: true, message } }`
+
+### POST /api/vuelos/restore (ADMIN)
+- **Campos**:
+  - `id` (uuid) — id del item de vuelo a restaurar
+- **Respuesta**: `{ ok: true, data: { success: true, message } }`
+
+### Notas de Validación y Seguridad
+- `status` válido: `PENDIENTE` | `HECHO` | `DESCARTADO`.
+- `motivo` es obligatorio cuando `status=DESCARTADO` (validación en API y en RPC).
+- RLS limita `SELECT/UPDATE` a supervisores asignados al expediente o `ADMIN`.
+- Soft delete/restore es exclusivamente `ADMIN` y queda auditado.
+
+### Integración Offline
+- Formularios en UI usan `OfflineQueueForm` para encolar mutaciones cuando no hay red.
+- Al reconectar, la cola se procesa automáticamente.
+- Componentes: `components/work/VueloAvanceActions.tsx` integra botones de marcado/volado y envía a `/api/vuelos/*`.

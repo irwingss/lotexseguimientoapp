@@ -214,3 +214,44 @@ NEXT_PUBLIC_REQUIRE_INSTALL=MOBILE_ONLY
 **Fecha**: 2025-08-08  
 **DoD verificado**: Modo offline funcional + mutaciones encoladas  
 **Próxima fase**: 4_admin_supervisores
+
+---
+
+## Fase 9 — Mutaciones Offline para Vuelos Avance
+
+### Integración
+- Los formularios de avance de vuelos usan `components/work/VueloAvanceActions.tsx` con `OfflineQueueForm`.
+- Endpoints utilizados:
+  - `POST /api/vuelos/marcado`
+  - `POST /api/vuelos/volado`
+
+### Payload (multipart/form-data)
+- `vuelo_id` (uuid) — requerido
+- `status` (`PENDIENTE|HECHO|DESCARTADO`) — requerido
+- `motivo` (text) — requerido si `status=DESCARTADO`
+- `precision` (number, opcional)
+- `fuente` (text, opcional)
+- `lat`, `lon` (opcionales; captura reservada; actualmente puede ir `null`)
+
+### Comportamiento de la Cola
+- Si está offline, el `FormData` se guarda en `mutations_queue` (IndexedDB vía Dexie; wrapper localStorage si aplica).
+- Al recuperar conexión:
+  - Se hace flush automático en orden FIFO hacia el endpoint objetivo.
+  - Reintentos con backoff exponencial en errores transitorios.
+- Los envíos online directos siguen funcionando (no redirigen de página).
+
+### Estados de UI
+- Botones muestran loading durante intento de envío.
+- `components/pwa/offline-indicator.tsx` refleja cantidad de mutaciones pendientes y conectividad.
+
+### Pruebas Manuales
+1. Forzar offline en DevTools.
+2. En `/expedientes`, cambiar estado de un vuelo a `HECHO`.
+3. Confirmar que aparece en la cola y que no navega.
+4. Volver online y verificar flush automático y respuesta `{ ok: true }`.
+5. Repetir con `DESCARTADO` asegurando que `motivo` es requerido.
+
+### Limitaciones
+- La vista no hace auto-refresh tras aplicar; pendiente revalidación/optimistic updates.
+- Campos de geolocalización están preparados pero no capturados por defecto.
+

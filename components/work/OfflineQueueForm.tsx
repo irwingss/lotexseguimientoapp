@@ -100,15 +100,36 @@ export const OfflineQueueForm = React.forwardRef<HTMLFormElement, Props>(functio
       action={action as any}
       method="POST"
       className={className}
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         if (typeof window === "undefined") return;
-        if (navigator.onLine) return; // let it submit normally when online
         e.preventDefault();
         const form = e.currentTarget as HTMLFormElement;
         const fd = new FormData(form);
+        const targetEndpoint = endpoint || window.location.pathname;
+
+        if (navigator.onLine) {
+          // Submit via fetch to avoid navigation to JSON endpoints
+          try {
+            const res = await fetch(targetEndpoint, {
+              method: "POST",
+              body: fd,
+              credentials: "include",
+            });
+            if (!res.ok) {
+              const msg = await res.text();
+              // eslint-disable-next-line no-alert
+              alert(`Error al enviar: ${msg || res.status}`);
+            }
+          } catch (err: any) {
+            // eslint-disable-next-line no-alert
+            alert(`Error de red: ${err?.message || "desconocido"}`);
+          }
+          return;
+        }
+
+        // Offline: queue for later
         const entries: [string, FormDataEntryValue][] = [];
         for (const pair of fd.entries()) entries.push([pair[0], pair[1]]);
-        const targetEndpoint = endpoint || window.location.pathname;
         const item: QueuedItem = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           endpoint: targetEndpoint,
@@ -119,7 +140,6 @@ export const OfflineQueueForm = React.forwardRef<HTMLFormElement, Props>(functio
         const queue = loadQueue();
         queue.push(item);
         saveQueue(queue);
-        // Provide a minimal UX hint
         try {
           // eslint-disable-next-line no-alert
           alert("Sin conexión: acción encolada. Se enviará automáticamente al reconectarse.");

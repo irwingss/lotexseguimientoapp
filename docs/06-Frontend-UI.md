@@ -175,3 +175,45 @@ SUPABASE_SERVICE_ROLE=your_supabase_service_role_key
 - ✅ Manejo de errores
 - ✅ UI responsive con shadcn/ui
 - ✅ Documentación completa
+
+---
+
+## Fase 9 — UI Vuelos Avance
+
+### Componentes
+- **`components/work/VueloAvanceActions.tsx`** (Client):
+  - Botones para actualizar `marcado` y `volado` (`PENDIENTE | HECHO | DESCARTADO`).
+  - Solicita `motivo` cuando `DESCARTADO` (validación UI + servidor).
+  - Envuelve cada acción en `OfflineQueueForm` para soporte offline.
+  - Envío hacia `/api/vuelos/marcado` y `/api/vuelos/volado`.
+- **`VuelosTab`** (Server):
+  - Columna “Acciones” integra `VueloAvanceActions` por fila de vuelo.
+  - RSC obtiene datos con RLS, renderiza UI con estado actual.
+
+### Interacción y Flujo
+1. Supervisor pulsa un botón de estado.
+2. Si `DESCARTADO`, aparece prompt para `motivo` (requerido).
+3. `OfflineQueueForm` intercepta:
+   - Online: envía `multipart/form-data` a la API correspondiente.
+   - Offline: encola la mutación en `mutations_queue` para flush automático.
+4. La vista no hace auto-refresh aún (mejora futura: revalidación/optimistic UI).
+
+### Validaciones
+- `status` debe ser uno de: `PENDIENTE | HECHO | DESCARTADO`.
+- `motivo` requerido si `status=DESCARTADO` (UI y API). 
+- Campos de geolocalización (`lat`, `lon`, `precision`, `fuente`) reservados; actualmente se envían `null`.
+
+### Control de Acceso
+- Acciones visibles para usuarios con acceso al expediente (RLS) o `ADMIN`.
+- Soft delete/restore NO se exponen en esta UI (solo backend/API; ADMIN).
+
+### Estados y Feedback
+- Botones muestran loading durante envío.
+- Errores de validación o RLS se muestran como toasts/alerts.
+- Indicador offline global comunica estado de cola y conectividad.
+
+### Pruebas Manuales
+- Cambiar `marcado` a `HECHO` y verificar auditoría/RLS.
+- Marcar `DESCARTADO` validando obligatoriedad de `motivo`.
+- Simular offline en DevTools y verificar encolado y flush.
+
