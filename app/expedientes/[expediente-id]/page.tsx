@@ -16,7 +16,6 @@ export default async function Page({
   params?: Promise<{ "expediente-id": string }>;
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  "use server";
   redirect("/expedientes");
   // Normalize params/searchParams for Next 14/15 differences (can be Promises)
   const p: any = params ? await (params as any) : undefined;

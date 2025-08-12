@@ -158,6 +158,11 @@ export function ExpedientesTable({
     }
   }
 
+  // Normalize incoming data to avoid runtime errors if RPC returns null items
+  const safeExpedientes: Expediente[] = Array.isArray(expedientes)
+    ? expedientes.filter((e: any): e is Expediente => !!e && typeof e.id === 'string')
+    : []
+
   if (loading) {
     return (
       <Card>
@@ -174,7 +179,7 @@ export function ExpedientesTable({
     )
   }
 
-  if (expedientes.length === 0) {
+  if (safeExpedientes.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -215,7 +220,7 @@ export function ExpedientesTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {expedientes.map((expediente) => (
+              {safeExpedientes.map((expediente) => (
                 <TableRow key={expediente.id}>
                   <TableCell className="font-medium">
                     {expediente.expediente_codigo}
@@ -328,13 +333,15 @@ export function ExpedientesTable({
             // Spread base fields
             ...(selectedExpediente as any),
             // Normalize assigned supervisors to flat shape expected by dialog
-            supervisores_asignados: (selectedExpediente.supervisores_asignados || []).map((s) => ({
-              id: s.supervisor.id,
-              nombre: s.supervisor.nombre,
-              email: s.supervisor.email,
-              rol: s.supervisor.rol,
-              activo: true,
-            })),
+            supervisores_asignados: (selectedExpediente.supervisores_asignados || [])
+              .filter((s: any) => !!s && !!s.supervisor)
+              .map((s: any) => ({
+                id: s.supervisor.id,
+                nombre: s.supervisor.nombre,
+                email: s.supervisor.email,
+                rol: s.supervisor.rol,
+                activo: true,
+              })),
           } as any}
           open={assignDialogOpen}
           onOpenChange={setAssignDialogOpen}

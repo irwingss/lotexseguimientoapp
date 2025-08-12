@@ -49,10 +49,10 @@ security definer
 as $function$
 begin
   return exists (
-    select 1 from public.supervisores 
-    where email = auth.email()
-    and permisos_sistema = 'ADMIN'
-    and is_deleted = false
+    select 1 from public.supervisores s
+    where s.email = (auth.jwt() ->> 'email')::citext
+      and s.permisos_sistema = 'ADMIN'
+      and coalesce(s.is_deleted, false) = false
   );
 end;
 $function$;
@@ -868,46 +868,46 @@ as $function$
     'expediente', (
       select jsonb_build_object(
         'id', e.id,
-        'codigo', e.codigo,
+        'codigo', e.expediente_codigo,
         'nombre', e.nombre,
-        'estado', e.estado,
-        'fecha_inicio', e.fecha_inicio,
-        'fecha_fin', e.fecha_fin
+        'estado', null,
+        'fecha_inicio', null,
+        'fecha_fin', null
       )
       from public.expedientes e
-      where e.id = expediente_id_param and e.deleted_at is null
+      where e.id = expediente_id_param and coalesce(e.is_deleted, false) = false
     ),
     'monitoreo_stats', (
       select jsonb_build_object(
         'total', count(*),
-        'pendiente', count(*) filter (where estado_avance = 'PENDIENTE'),
-        'hecho', count(*) filter (where estado_avance = 'HECHO'),
-        'descartado', count(*) filter (where estado_avance = 'DESCARTADO'),
+        'pendiente', count(*) filter (where monitoreado_status = 'PENDIENTE'),
+        'hecho', count(*) filter (where monitoreado_status = 'HECHO'),
+        'descartado', count(*) filter (where monitoreado_status = 'DESCARTADO'),
         'porcentaje_completitud', 
           case 
             when count(*) > 0 then 
-              round((count(*) filter (where estado_avance = 'HECHO')::numeric / count(*)::numeric) * 100, 2)
+              round((count(*) filter (where monitoreado_status = 'HECHO')::numeric / count(*)::numeric) * 100, 2)
             else 0
           end
       )
-      from public.monitoreo_puntos
-      where expediente_id = expediente_id_param and deleted_at is null
+      from public.monitoreo_puntos mp
+      where mp.expediente_id = expediente_id_param and coalesce(mp.is_deleted, false) = false
     ),
     'vuelos_stats', (
       select jsonb_build_object(
         'total', count(*),
-        'pendiente', count(*) filter (where estado_avance = 'PENDIENTE'),
-        'hecho', count(*) filter (where estado_avance = 'HECHO'),
-        'descartado', count(*) filter (where estado_avance = 'DESCARTADO'),
+        'pendiente', count(*) filter (where volado_status = 'PENDIENTE'),
+        'hecho', count(*) filter (where volado_status = 'HECHO'),
+        'descartado', count(*) filter (where volado_status = 'DESCARTADO'),
         'porcentaje_completitud', 
           case 
             when count(*) > 0 then 
-              round((count(*) filter (where estado_avance = 'HECHO')::numeric / count(*)::numeric) * 100, 2)
+              round((count(*) filter (where volado_status = 'HECHO')::numeric / count(*)::numeric) * 100, 2)
             else 0
           end
       )
-      from public.vuelos_items
-      where expediente_id = expediente_id_param and deleted_at is null
+      from public.vuelos_items vi
+      where vi.expediente_id = expediente_id_param and coalesce(vi.is_deleted, false) = false
     )
   )
   where (

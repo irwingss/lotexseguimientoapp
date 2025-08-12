@@ -165,7 +165,9 @@ export default async function Page({
         </form>
 
         {/* Acciones masivas por locación */}
-        <BulkLocacionActions expedienteId={selectedExpedienteId} />
+        {selectedExpedienteId ? (
+          <BulkLocacionActions expedienteId={selectedExpedienteId} />
+        ) : null}
       </header>
 
       {/* Añadir punto (ANADIDO) */}

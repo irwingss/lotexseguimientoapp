@@ -98,7 +98,7 @@ export const OfflineQueueForm = React.forwardRef<HTMLFormElement, Props>(functio
         else if (ref && typeof (ref as any) === "object") (ref as React.MutableRefObject<HTMLFormElement | null>).current = node;
       }}
       action={action as any}
-      method="post"
+      method="POST"
       className={className}
       onSubmit={(e) => {
         if (typeof window === "undefined") return;

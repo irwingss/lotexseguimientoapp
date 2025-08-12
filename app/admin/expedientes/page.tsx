@@ -71,7 +71,11 @@ export default function ExpedientesPage() {
         return
       }
 
-      setExpedientes(data || [])
+      // Normalize to avoid undefined/null items from RPC
+      const normalized = Array.isArray(data)
+        ? data.filter((e: any) => !!e && typeof e.id === 'string')
+        : []
+      setExpedientes(normalized)
     } catch (error) {
       console.error('Error:', error)
       console.error('Error al cargar expedientes')

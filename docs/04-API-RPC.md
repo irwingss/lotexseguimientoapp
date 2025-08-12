@@ -277,6 +277,65 @@ All critical operations are automatically logged with:
 - User agent
 - Operation details (JSONB)
 
+## Endpoints HTTP (Next.js App Routes)
+
+### POST /api/monitoreo/bulk-marcado
+- Forma: `multipart/form-data`
+- Campos:
+  - `expediente_id` (uuid) — requerido
+  - `locacion` (text) — requerido
+  - `status` (text) — uno de: `PENDIENTE`, `HECHO`, `DESCARTADO`
+  - `motivo` (text) — requerido si `status=DESCARTADO`
+  - `only_unset` (boolean, default: `true`) — si `true`, sólo actualiza puntos en `PENDIENTE`
+  - `dry_run` (boolean, default: `false`) — si `true`, previsualiza sin aplicar cambios
+- Seguridad:
+  - Autenticación Supabase requerida.
+  - Debe estar asignado al expediente o ser `ADMIN` (ver `is_admin()`), validado en RPC.
+- Respuesta:
+  - Éxito: `{ ok: true, result: { dry_run, total_puntos, puntos_afectados, expediente_id, locacion, nuevo_status, motivo? } }`
+  - Error: `{ ok: false, error: string }`
+- Ejemplos:
+```bash
+curl -X POST \
+  -F expediente_id=11111111-1111-1111-1111-111111111111 \
+  -F locacion=L1 \
+  -F status=HECHO \
+  -F dry_run=true \
+  http://localhost:3000/api/monitoreo/bulk-marcado
+
+curl -X POST \
+  -F expediente_id=11111111-1111-1111-1111-111111111111 \
+  -F locacion=L1 \
+  -F status=DESCARTADO \
+  -F motivo="Zona inaccesible" \
+  http://localhost:3000/api/monitoreo/bulk-marcado
+```
+
+### POST /api/monitoreo/bulk-monitoreo
+- Forma: `multipart/form-data`
+- Campos:
+  - `expediente_id` (uuid) — requerido
+  - `locacion` (text) — requerido
+  - `status` (text) — uno de: `PENDIENTE`, `HECHO`, `DESCARTADO`
+  - `accion_id` (uuid) — opcional; si `status=HECHO` y es `NULL`, se autoselecciona por fecha (`f_default_accion_por_fecha`)
+  - `motivo` (text) — requerido si `status=DESCARTADO`
+  - `only_unset` (boolean, default: `true`)
+  - `dry_run` (boolean, default: `false`)
+- Seguridad y respuesta: igual a `bulk-marcado`.
+- Ejemplo:
+```bash
+curl -X POST \
+  -F expediente_id=11111111-1111-1111-1111-111111111111 \
+  -F locacion=L2 \
+  -F status=HECHO \
+  -F dry_run=true \
+  http://localhost:3000/api/monitoreo/bulk-monitoreo
+```
+
+Notas:
+- Ambos endpoints hacen `revalidatePath('/expedientes')` cuando `dry_run=false` para refrescar UI.
+- Validaciones de motivo y acceso se aplican antes de invocar los RPCs.
+
 ## Testing
 Use the following test queries to verify RPC functions:
 ```sql
@@ -289,3 +348,70 @@ SELECT COUNT(*) FROM public.rpc_export_monitoreo('your-expedition-id');
 -- Test summary function
 SELECT public.rpc_get_expediente_summary('your-expedition-id');
 ```
+
+### Testing HTTP Bulk Endpoints
+
+Pruebas manuales para `/api/monitoreo/bulk-marcado` y `/api/monitoreo/bulk-monitoreo`.
+
+- __Dry-run marcado por locación__
+  ```bash
+  curl -X POST \
+    -F expediente_id=<uuid> \
+    -F locacion=L1 \
+    -F status=HECHO \
+    -F dry_run=true \
+    http://localhost:3000/api/monitoreo/bulk-marcado
+  ```
+  - Esperado: `ok=true`, `result.dry_run=true`, conteos sin cambios aplicados.
+
+- __DESCARTADO exige motivo (marcado)__
+  ```bash
+  curl -X POST \
+    -F expediente_id=<uuid> \
+    -F locacion=L1 \
+    -F status=DESCARTADO \
+    http://localhost:3000/api/monitoreo/bulk-marcado
+  ```
+  - Esperado: `400`, `ok=false`, `error` indica que el motivo es obligatorio.
+
+- __Monitoreo HECHO sin accion_id (autoselección por fecha)__
+  ```bash
+  curl -X POST \
+    -F expediente_id=<uuid> \
+    -F locacion=L2 \
+    -F status=HECHO \
+    -F dry_run=true \
+    http://localhost:3000/api/monitoreo/bulk-monitoreo
+  ```
+  - Esperado: `ok=true`, se aplica lógica de selección por rango de fechas en el RPC.
+
+- __Solo actualiza PENDIENTE (only_unset)__
+  ```bash
+  curl -X POST \
+    -F expediente_id=<uuid> \
+    -F locacion=L1 \
+    -F status=HECHO \
+    -F only_unset=true \
+    -F dry_run=true \
+    http://localhost:3000/api/monitoreo/bulk-marcado
+  ```
+  - Esperado: `puntos_afectados` no incluye registros ya establecidos.
+
+- __RLS/Permisos__ (usuario no asignado)
+  - Enviar cualquier solicitud con sesión de usuario no asignado al expediente.
+  - Esperado: `ok=false` con `error` del RPC por falta de permisos.
+
+- __Aplicación real (sin dry_run)__
+  ```bash
+  curl -X POST \
+    -F expediente_id=<uuid> \
+    -F locacion=L1 \
+    -F status=HECHO \
+    http://localhost:3000/api/monitoreo/bulk-marcado
+  ```
+  - Esperado: `ok=true`, cambios aplicados y refresco de `/expedientes`.
+
+- __Offline Queue (UI)__
+  - En `/expedientes`, activar modo offline en DevTools.
+  - Enviar formulario en `BulkLocacionActions`.
+  - Esperado: acción encolada localmente; al volver online, se envía automáticamente.

@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { LayoutDashboard, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 
 const geistSans = Geist({
@@ -26,26 +30,71 @@ export default async function RootLayout({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   let selectedDetail: any = null;
+  let isAdmin = false;
   if (user) {
     const { data } = await supabase.rpc(
       "rpc_get_expediente_seleccionado_detail"
     );
     selectedDetail = data;
+    // Check admin permission via RPC; ignore errors and default to false
+    try {
+      const { data: adminFlag } = await supabase.rpc('is_admin');
+      isAdmin = !!adminFlag;
+    } catch {}
   }
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');var d=t? t==='dark': true; var c=document.documentElement.classList; if(d){c.add('dark')}else{c.remove('dark')}}catch(e){document.documentElement.classList.add('dark')}})();",
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {/* Global selected expediente badge visible to all users */}
         <div className="w-full border-b bg-muted/30">
-          <div className="container mx-auto py-1.5 px-4">
+          <div className="container mx-auto py-1.5 px-4 flex items-center justify-between">
             <div className="text-[11px] md:text-xs inline-flex items-center gap-2 rounded px-2 py-0.5">
               <span className="text-muted-foreground">Expediente seleccionado:</span>
               <span className="font-medium">{selectedDetail?.expediente_codigo ?? "—"}</span>
               {selectedDetail?.nombre ? (
                 <span className="text-muted-foreground">— {selectedDetail?.nombre}</span>
               ) : null}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {isAdmin && (
+                <>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Ir al inicio"
+                    className="h-8"
+                  >
+                    <Link href="/" prefetch>
+                      <Home className="h-4 w-4" />
+                      <span className="hidden md:inline">Inicio</span>
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Abrir panel de administrador"
+                    className="h-8"
+                  >
+                    <Link href="/admin" prefetch>
+                      <LayoutDashboard className="h-4 w-4" />
+                      <span className="hidden md:inline">Admin</span>
+                    </Link>
+                  </Button>
+                </>
+              )}
+              <ThemeToggle />
             </div>
           </div>
         </div>

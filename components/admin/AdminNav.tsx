@@ -3,10 +3,10 @@ import Link from "next/link";
 export function AdminNav() {
   const items = [
     { href: "/admin", label: "Dashboard" },
-    { href: "/admin/personal", label: "Personal" },
     { href: "/admin/expedientes", label: "Expedientes" },
     { href: "/admin/seleccion", label: "Selección Global" },
     { href: "/admin/importar", label: "Importación" },
+    { href: "/admin/personal", label: "Personal" },
   ];
 
   return (

@@ -1,5 +1,41 @@
 # Changelog - OEFA Lote X
 
+## [Phase 8 & 8b] - 2025-08-11 - 🔎 READY FOR CLOSURE
+
+### 🎯 Objective: Avance de monitoreo y Acciones por locación
+
+### ✅ Added
+- __HTTP API Endpoints__
+  - `app/api/monitoreo/bulk-marcado/route.ts` → `POST /api/monitoreo/bulk-marcado`
+  - `app/api/monitoreo/bulk-monitoreo/route.ts` → `POST /api/monitoreo/bulk-monitoreo`
+  - Soportan `dry_run`, `only_unset`, validación de `motivo` para `DESCARTADO` y revalidación de `/expedientes` tras aplicar.
+- __UI__
+  - `components/work/BulkLocacionActions.tsx`: Formularios de acciones masivas por locación (marcado/monitoreo) con previsualización (dry-run) y soporte offline.
+  - Integración condicional en `app/expedientes/page.tsx` (solo si hay expediente seleccionado globalmente).
+- __Offline Queue__
+  - `components/work/OfflineQueueForm.tsx`: migrado a `React.forwardRef` para controlar envío y flags (`dry_run`) desde el padre.
+- __Routing__
+  - `app/expedientes/[expediente-id]/page.tsx`: redirección SSR a `/expedientes` para consolidar página única de supervisión.
+- __Docs__
+  - `docs/04-API-RPC.md`: Sección de endpoints HTTP y escenarios de pruebas manuales (DoD/SS&T).
+
+### 🔒 Security & Access Control
+- ADMIN definido como `supervisores.permisos_sistema = 'ADMIN' AND is_deleted=false` validado por `is_admin()`.
+- RPCs `rpc_bulk_update_locacion_marcado/monitoreo` imponen:
+  - Asignación al expediente o ADMIN.
+  - `motivo` obligatorio cuando `status=DESCARTADO`.
+  - Autoselección de acción por rango de fechas cuando `accion_id` es `NULL` en monitoreo HECHO.
+  - Auditoría y RLS alineadas al spec.
+
+### 🧪 Testing
+- Casos manuales documentados para dry-run, motivo requerido, only_unset, autoselección de acción, denegación por RLS y flujo offline.
+- Pendiente: ejecución E2E y checklist de SS&T para sello definitivo.
+
+### 📌 Status
+- Implementación estable y documentada. Lista para validación final DoD/SS&T y cierre de fase.
+
+---
+
 ## [Phase 1] - 2025-08-08 - ✅ COMPLETED
 
 ### 🎯 **Objective**: Database Schema and RLS Implementation
