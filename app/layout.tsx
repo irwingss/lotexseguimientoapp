@@ -55,46 +55,48 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* Global selected expediente badge visible to all users */}
-        <div className="w-full border-b bg-muted/30">
-          <div className="container mx-auto py-1.5 px-4 flex items-center justify-between">
-            <div className="text-[11px] md:text-xs inline-flex items-center gap-2 rounded px-2 py-0.5">
-              <span className="text-muted-foreground">Expediente seleccionado:</span>
-              <span className="font-medium">{selectedDetail?.expediente_codigo ?? "—"}</span>
-              {selectedDetail?.nombre ? (
-                <span className="text-muted-foreground">— {selectedDetail?.nombre}</span>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-1.5">
-              {isAdmin && (
-                <>
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Ir al inicio"
-                    className="h-8"
-                  >
-                    <Link href="/" prefetch>
-                      <Home className="h-4 w-4" />
-                      <span className="hidden md:inline">Inicio</span>
-                    </Link>
-                  </Button>
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Abrir panel de administrador"
-                    className="h-8"
-                  >
-                    <Link href="/admin" prefetch>
-                      <LayoutDashboard className="h-4 w-4" />
-                      <span className="hidden md:inline">Admin</span>
-                    </Link>
-                  </Button>
-                </>
-              )}
-              <ThemeToggle />
+        {/* Global selected expediente badge visible to all users - mobile polished */}
+        <div className="sticky top-0 z-40 w-full border-b bg-muted/30 backdrop-blur supports-[backdrop-filter]:bg-muted/20">
+          <div className="max-w-screen-2xl mx-auto pl-[calc(env(safe-area-inset-left)+16px)] pr-[calc(env(safe-area-inset-right)+16px)] sm:px-6 lg:px-8 py-2">
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 sm:items-center">
+              <div className="min-w-0 text-[11px] md:text-xs inline-flex items-center gap-1.5 rounded">
+                <span className="text-muted-foreground shrink-0">Expediente:</span>
+                <span className="font-medium truncate max-w-full">
+                  {selectedDetail?.expediente_codigo ?? "—"}
+                  {selectedDetail?.nombre ? ` — ${selectedDetail?.nombre}` : ''}
+                </span>
+              </div>
+              <div className="flex items-center justify-start sm:justify-end gap-1">
+                {isAdmin && (
+                  <>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Ir al inicio"
+                      className="h-8 px-2"
+                    >
+                      <Link href="/" prefetch>
+                        <Home className="h-4 w-4" />
+                        <span className="hidden md:inline ml-1">Inicio</span>
+                      </Link>
+                    </Button>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Abrir panel de administrador"
+                      className="h-8 px-2"
+                    >
+                      <Link href="/admin" prefetch>
+                        <LayoutDashboard className="h-4 w-4" />
+                        <span className="hidden md:inline ml-1">Admin</span>
+                      </Link>
+                    </Button>
+                  </>
+                )}
+                <ThemeToggle />
+              </div>
             </div>
           </div>
         </div>

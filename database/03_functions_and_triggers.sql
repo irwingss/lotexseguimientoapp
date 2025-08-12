@@ -877,15 +877,16 @@ as $function$
       from public.expedientes e
       where e.id = expediente_id_param and coalesce(e.is_deleted, false) = false
     ),
+    -- Avance de monitoreo (se mantiene para compatibilidad)
     'monitoreo_stats', (
       select jsonb_build_object(
         'total', count(*),
         'pendiente', count(*) filter (where monitoreado_status = 'PENDIENTE'),
         'hecho', count(*) filter (where monitoreado_status = 'HECHO'),
         'descartado', count(*) filter (where monitoreado_status = 'DESCARTADO'),
-        'porcentaje_completitud', 
-          case 
-            when count(*) > 0 then 
+        'porcentaje_completitud',
+          case
+            when count(*) > 0 then
               round((count(*) filter (where monitoreado_status = 'HECHO')::numeric / count(*)::numeric) * 100, 2)
             else 0
           end
@@ -893,18 +894,62 @@ as $function$
       from public.monitoreo_puntos mp
       where mp.expediente_id = expediente_id_param and coalesce(mp.is_deleted, false) = false
     ),
+    -- Nuevo: avance de marcado (para doble avance)
+    'marcado_stats', (
+      select jsonb_build_object(
+        'total', count(*),
+        'pendiente', count(*) filter (where marcado_status = 'PENDIENTE'),
+        'hecho', count(*) filter (where marcado_status = 'HECHO'),
+        'descartado', count(*) filter (where marcado_status = 'DESCARTADO'),
+        'porcentaje_completitud',
+          case
+            when count(*) > 0 then
+              round((count(*) filter (where marcado_status = 'HECHO')::numeric / count(*)::numeric) * 100, 2)
+            else 0
+          end
+      )
+      from public.monitoreo_puntos mp
+      where mp.expediente_id = expediente_id_param and coalesce(mp.is_deleted, false) = false
+    ),
+    -- Nuevo: origen de puntos (replanteados, añadidos, originales, importados)
+    'origen_stats', (
+      select jsonb_build_object(
+        'total', count(*),
+        'replanteados', count(*) filter (where tipo_origen = 'REPLANTEO'),
+        'anadidos', count(*) filter (where tipo_origen = 'ANADIDO'),
+        'eliminados', (
+          select count(*)
+          from public.monitoreo_puntos mpd
+          where mpd.expediente_id = expediente_id_param
+            and coalesce(mpd.is_deleted, false) = true
+        )
+      )
+      from public.monitoreo_puntos mp
+      where mp.expediente_id = expediente_id_param and coalesce(mp.is_deleted, false) = false
+    ),
+    -- Vuelos: mantener agregados por estado y añadir desglose por tipo (PAF, PD, CHECKPOINT)
     'vuelos_stats', (
       select jsonb_build_object(
         'total', count(*),
         'pendiente', count(*) filter (where volado_status = 'PENDIENTE'),
         'hecho', count(*) filter (where volado_status = 'HECHO'),
         'descartado', count(*) filter (where volado_status = 'DESCARTADO'),
-        'porcentaje_completitud', 
-          case 
-            when count(*) > 0 then 
+        'porcentaje_completitud',
+          case
+            when count(*) > 0 then
               round((count(*) filter (where volado_status = 'HECHO')::numeric / count(*)::numeric) * 100, 2)
             else 0
-          end
+          end,
+        'por_tipo', (
+          select jsonb_build_object(
+            'PAF', count(*) filter (where vi2.tipo = 'PAF'),
+            'PD', count(*) filter (where vi2.tipo = 'PD'),
+            'CHECKPOINT', count(*) filter (where vi2.tipo = 'CHECKPOINT'),
+            'total', count(*)
+          )
+          from public.vuelos_items vi2
+          where vi2.expediente_id = expediente_id_param and coalesce(vi2.is_deleted, false) = false
+        )
       )
       from public.vuelos_items vi
       where vi.expediente_id = expediente_id_param and coalesce(vi.is_deleted, false) = false
